@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const HomePage = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsVisible(true);
   }, []);
+
+  const handleStartApplication = () => {
+    navigate("/map");
+  };
+
+  const handleViewMap = () => {
+    navigate("/map");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 overflow-hidden">
@@ -33,7 +43,10 @@ const HomePage = () => {
               <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl blur opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:animate-pulse-slow"></div>
                 <div className="absolute -inset-2 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-xl blur opacity-0 group-hover:opacity-30 transition-all duration-700"></div>
-                <button className="cursor-pointer relative bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-blue-500/30 group-hover:scale-105 animate-slideInRight">
+                <button
+                  onClick={handleStartApplication}
+                  className="cursor-pointer relative bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-blue-500/30 group-hover:scale-105 animate-slideInRight"
+                >
                   Start Application
                   <svg
                     className="inline-block w-4 h-4 ml-2 transition-transform duration-300 group-hover:translate-x-1"
@@ -109,6 +122,7 @@ const HomePage = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-6">
                 <button
+                  onClick={handleViewMap}
                   className="cursor-pointer group relative bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/40 transform hover:-translate-y-1 animate-slideInUp"
                   style={{ animationDelay: "300ms" }}
                 >
