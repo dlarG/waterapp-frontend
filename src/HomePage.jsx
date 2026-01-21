@@ -169,7 +169,7 @@ const HomePage = () => {
               </div>
             </div>
 
-            <div className="hidden lg:block relative">
+            <div className="hidden lg:block relative animate-slideInUp">
               <div className="absolute inset-0 bg-gradient-to-l from-blue-500/5 to-cyan-500/5 rounded-3xl backdrop-blur-sm border border-white/20"></div>
               <div className="relative h-full min-h-[500px]">
                 <div className="absolute inset-0 bg-gradient-to-l from-blue-500/5 to-cyan-500/5 rounded-3xl backdrop-blur-sm border border-white/20"></div>
@@ -179,107 +179,6 @@ const HomePage = () => {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slideInRight {
-          from {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0) translateX(0);
-          }
-          33% {
-            transform: translateY(-20px) translateX(20px);
-          }
-          66% {
-            transform: translateY(10px) translateX(-10px);
-          }
-        }
-
-        @keyframes gradient {
-          0%,
-          100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-
-        @keyframes pulse-slow {
-          0%,
-          100% {
-            opacity: 0.7;
-          }
-          50% {
-            opacity: 1;
-          }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 1s ease-out;
-        }
-
-        .animate-slideInUp {
-          animation: slideInUp 0.8s ease-out forwards;
-        }
-
-        .animate-slideInRight {
-          animation: slideInRight 0.8s ease-out;
-        }
-
-        .animate-float {
-          animation: float 15s ease-in-out infinite;
-        }
-
-        .animate-gradient {
-          animation: gradient 3s ease infinite;
-          background-size: 200% auto;
-        }
-
-        .animate-pulse-slow {
-          animation: pulse-slow 2s ease-in-out infinite;
-        }
-
-        .animation-delay-1000 {
-          animation-delay: 1s;
-        }
-
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-      `}</style>
     </div>
   );
 };

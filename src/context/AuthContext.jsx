@@ -3,6 +3,7 @@ import { adminAPI } from "../api/api";
 
 const AuthContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -20,6 +21,7 @@ export const AuthProvider = ({ children }) => {
     const savedAdmin = localStorage.getItem("admin");
     if (savedAdmin) {
       try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setAdmin(JSON.parse(savedAdmin));
       } catch (error) {
         console.error("Error parsing saved admin:", error);

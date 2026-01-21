@@ -1,268 +1,540 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { waterLocationAPI } from "./api/api";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-// You need to get a free API key from https://www.mapbox.com/
-mapboxgl.accessToken =
-  "pk.eyJ1IjoidGVzdC11c2VyIiwiYSI6ImNsdHh4eXh4eDAwMDAzamxhbGpzdDEyeXEifQ.XXX"; // Replace with your Mapbox token
-
 const MapView = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
-  const markersRef = useRef([]);
+  const markersRef = useRef([]); // Store markers here
+  const popupsRef = useRef([]); // Store popups here
   const [locations, setLocations] = useState([]);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [mapStatus, setMapStatus] = useState("initializing");
 
-  // Maasin City, Southern Leyte bounds
-  const MAASIN_BOUNDS = {
-    center: [125.03, 10.13], // [lng, lat]
-    zoom: 13,
-    maxBounds: [
-      [124.95, 10.05], // Southwest coordinates [lng, lat]
-      [125.05, 10.15], // Northeast coordinates [lng, lat]
-    ],
-  };
+  const MAPBOX_TOKEN =
+    "pk.eyJ1IjoicmFsZDEyMDEwMiIsImEiOiJjbWttZGNyaWgwY3h3M2xzZmIwZ3VhYnM3In0.xkubwGBDjYnc41XB_7FT1g";
 
-  // Water status colors
-  const getStatusColor = (status) => {
+  // Enhanced status color function with grey for no samples
+  const getStatusColor = (status, hasResults) => {
+    if (!hasResults) {
+      return "#9ca3af";
+    }
     switch (status) {
       case "safe":
-        return "#10b981"; // Green
+        return "#10b981";
       case "undrinkable":
-        return "#f59e0b"; // Orange
+        return "#f59e0b";
       case "hazard":
-        return "#ef4444"; // Red
+        return "#ef4444";
       default:
-        return "#6b7280"; // Gray
+        return "#9ca3af";
     }
   };
 
-  // Create marker HTML
-  const createMarkerElement = (location) => {
-    const el = document.createElement("div");
-    el.className = "custom-marker";
-    el.style.cssText = `
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      background-color: ${getStatusColor(location.water_status)};
-      border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    `;
-
-    // Add hover effect
-    el.addEventListener("mouseenter", () => {
-      el.style.transform = "scale(1.2)";
-    });
-
-    el.addEventListener("mouseleave", () => {
-      el.style.transform = "scale(1)";
-    });
-
-    return el;
+  // Check if location has test results
+  const hasTestResults = (location) => {
+    return location.coliform_bacteria !== null || location.e_coli !== null;
   };
 
-  // Create popup content
-  const createPopupContent = (location) => {
-    const statusColors = {
-      safe: "bg-green-100 text-green-800 border-green-200",
-      undrinkable: "bg-orange-100 text-orange-800 border-orange-200",
-      hazard: "bg-red-100 text-red-800 border-red-200",
-    };
-
-    return `
-      <div class="p-4 max-w-sm">
-        <div class="mb-3">
-          <h3 class="font-bold text-lg text-gray-900 mb-1">${
-            location.full_name
-          }</h3>
-          <div class="flex items-center space-x-2">
-            <span class="px-2 py-1 rounded-full text-xs font-semibold border ${
-              statusColors[location.water_status] || statusColors.safe
-            }">
-              ${location.water_status.toUpperCase()}
-            </span>
-          </div>
-        </div>
-        
-        <div class="space-y-2 text-sm">
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <span class="font-medium text-gray-600">Coliform:</span>
-              <span class="ml-1 ${
-                location.coliform_bacteria
-                  ? "text-red-600 font-semibold"
-                  : "text-green-600"
-              }">
-                ${location.coliform_bacteria ? "Present" : "Absent"}
-              </span>
-            </div>
-            <div>
-              <span class="font-medium text-gray-600">E. Coli:</span>
-              <span class="ml-1 ${
-                location.e_coli
-                  ? "text-red-600 font-semibold"
-                  : "text-green-600"
-              }">
-                ${location.e_coli ? "Present" : "Absent"}
-              </span>
-            </div>
-          </div>
-          
-          ${
-            location.sample_date
-              ? `
-            <div>
-              <span class="font-medium text-gray-600">Sample Date:</span>
-              <span class="ml-1">${new Date(
-                location.sample_date
-              ).toLocaleDateString()}</span>
-            </div>
-          `
-              : ""
-          }
-          
-          <div class="text-xs text-gray-500 mt-2">
-            Coordinates: ${location.latitude.toFixed(
-              6
-            )}, ${location.longitude.toFixed(6)}
-          </div>
-        </div>
-      </div>
-    `;
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return "No sample date";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return "Invalid date";
+    }
   };
 
-  // Initialize map
-  useEffect(() => {
-    if (map.current) return; // Initialize map only once
+  // Format time for display
+  const formatTime = (timeString) => {
+    if (!timeString) return "No sample time";
+    try {
+      const timeParts = timeString.split(":");
+      const hours = parseInt(timeParts[0]);
+      const minutes = timeParts[1];
+      const ampm = hours >= 12 ? "PM" : "AM";
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${minutes} ${ampm}`;
+    } catch {
+      return timeString || "Invalid time";
+    }
+  };
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/satellite-streets-v12", // Satellite imagery
-      center: MAASIN_BOUNDS.center,
-      zoom: MAASIN_BOUNDS.zoom,
-      maxBounds: MAASIN_BOUNDS.maxBounds,
-    });
+  // Get bacteria status text
+  const getBacteriaStatus = (bacteriaValue) => {
+    if (bacteriaValue === null) return "Not tested";
+    return bacteriaValue ? "Present" : "Absent";
+  };
 
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+  // Get bacteria status color
+  const getBacteriaColor = (bacteriaValue) => {
+    if (bacteriaValue === null) return "#9ca3af";
+    return bacteriaValue ? "#ef4444" : "#10b981";
+  };
 
-    // Add scale control
-    map.current.addControl(
-      new mapboxgl.ScaleControl({
-        maxWidth: 100,
-        unit: "metric",
-      })
-    );
-
-    return () => {
-      if (map.current) {
-        map.current.remove();
-      }
-    };
-  }, []);
-
-  // Fetch water locations
+  // Fetch locations
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        setLoading(true);
         const response = await waterLocationAPI.getAll();
-        if (response.success) {
+        if (response.success && response.data) {
           setLocations(response.data);
-        } else {
-          setError("Failed to load water locations");
+          console.log(`✅ Loaded ${response.data.length} locations`);
         }
       } catch (err) {
-        setError("Error fetching data: " + err.message);
-      } finally {
-        setLoading(false);
+        console.error("❌ Error:", err);
       }
     };
-
     fetchLocations();
   }, []);
 
-  // Add markers to map
+  // Initialize map
   useEffect(() => {
-    if (!map.current || locations.length === 0) return;
+    if (map.current) return;
 
-    // Clear existing markers
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    mapboxgl.prewarm = () => {};
+    mapboxgl.clearPrewarmedResources = () => {};
 
-    // Add new markers
-    locations.forEach((location) => {
-      if (location.latitude && location.longitude) {
-        const el = createMarkerElement(location);
+    try {
+      setMapStatus("creating");
 
-        const popup = new mapboxgl.Popup({
-          offset: 25,
-          closeButton: true,
-          closeOnClick: false,
-        }).setHTML(createPopupContent(location));
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/mapbox/standard-satellite",
+        center: [124.84, 10.14],
+        zoom: 12,
+        attributionControl: true,
+        trackResize: true,
+        preserveDrawingBuffer: false,
+        antialias: false,
+        optimizeForTerrain: false,
+      });
 
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat([location.longitude, location.latitude])
-          .setPopup(popup)
-          .addTo(map.current);
+      map.current.on("load", () => {
+        console.log("✅ Map loaded!");
+        setMapStatus("loaded");
+      });
 
-        // Store marker reference
-        markersRef.current.push(marker);
+      map.current.on("error", (e) => {
+        console.error("❌ Map error:", e);
+        setMapStatus("error");
+      });
 
-        // Handle marker click
-        el.addEventListener("click", () => {
-          setSelectedLocation(location);
-          popup.addTo(map.current);
-        });
+      // Add navigation controls
+      map.current.addControl(new mapboxgl.NavigationControl());
+    } catch (error) {
+      console.error("❌ Init error:", error);
+      setMapStatus("error");
+    }
+
+    return () => {
+      if (map.current) {
+        // Clean up all markers and popups
+        markersRef.current.forEach((marker) => marker.remove());
+        markersRef.current = [];
+        popupsRef.current.forEach((popup) => popup.remove());
+        popupsRef.current = [];
+        map.current.remove();
+        map.current = null;
       }
-    });
-  }, [locations]);
+    };
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">
-            Loading water monitoring locations...
-          </p>
+  // Status explanation helper
+  const getStatusExplanation = (status, hasResults) => {
+    if (!hasResults) {
+      return "⏳ This location has been identified but water samples have not been collected or tested yet. Testing is required to determine water quality status.";
+    }
+
+    switch (status) {
+      case "safe":
+        return "✅ Water quality tests indicate this source is safe for drinking. No harmful bacteria detected.";
+      case "undrinkable":
+        return "⚠️ Water quality tests show presence of bacteria. This water should be treated before consumption.";
+      case "hazard":
+        return "🚨 Water quality tests show bacterial contamination. This water is unsafe for drinking and requires treatment.";
+      default:
+        return "❓ Water quality status needs further evaluation.";
+    }
+  };
+
+  // Add markers when map and data are ready
+  useEffect(() => {
+    if (mapStatus === "loaded" && locations.length > 0 && map.current) {
+      addMarkers();
+    }
+  }, [locations, mapStatus]);
+
+  // Create popup content
+  const createPopupContent = (location) => {
+    const hasResults = hasTestResults(location);
+
+    return `
+      <div style="
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        padding: 0;
+        margin: 0;
+      ">
+        <!-- Header -->
+        <div style="
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 15px;
+          margin: -10px -10px 15px -10px;
+          border-radius: 8px 8px 0 0;
+        ">
+          <h3 style="
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+          ">${location.full_name}</h3>
+          <div style="
+            margin-top: 8px;
+            font-size: 11px;
+            opacity: 0.9;
+          ">
+            📍 ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
+          </div>
+        </div>
+
+        <!-- Status Badge -->
+        <div style="
+          margin-bottom: 15px;
+          display: flex;
+          justify-content: center;
+        ">
+          <div style="
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            background-color: ${getStatusColor(
+              location.water_status,
+              hasResults
+            )};
+            color: white;
+            letter-spacing: 0.5px;
+          ">
+            ${hasResults ? location.water_status : "NO SAMPLE YET"}
+          </div>
+        </div>
+
+        <!-- Sample Information -->
+        <div style="margin-bottom: 15px;">
+          <div style="
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            margin-left: 2px;
+            display: flex;
+            align-items: center;
+          ">
+            📅 Sample Information
+          </div>
+          
+          <div style="
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+            margin-left: 5px;
+            border-bottom: 1px solid #f3f4f6;
+          ">
+            <span style="color: #6b7280;">Date:</span>
+            <span style="color: #1f2937; font-weight: 500;">
+              ${formatDate(location.sample_date)}
+            </span>
+          </div>
+
+          <div style="
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            margin-left: 5px;
+            font-size: 12px;
+          ">
+            <span style="color: #6b7280;">Time:</span>
+            <span style="color: #1f2937; font-weight: 500;">
+              ${formatTime(location.sample_time)}
+            </span>
+          </div>
+        </div>
+
+        <!-- Test Results -->
+        <div style="margin-bottom: 10px;">
+          <div style="
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+          ">
+            🧪 Test Results
+          </div>
+          
+          <div style="
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 12px;
+            margin-left: 5px;
+            border-bottom: 1px solid #f3f4f6;
+          ">
+            <span style="color: #6b7280;">Coliform Bacteria:</span>
+            <span style="
+              color: ${getBacteriaColor(location.coliform_bacteria)};
+              font-weight: 600;
+            ">
+              ${getBacteriaStatus(location.coliform_bacteria)}
+            </span>
+          </div>
+
+          <div style="
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            margin-left: 5px;
+            font-size: 12px;
+          ">
+            <span style="color: #6b7280;">E. Coli:</span>
+            <span style="
+              color: ${getBacteriaColor(location.e_coli)};
+              font-weight: 600;
+            ">
+              ${getBacteriaStatus(location.e_coli)}
+            </span>
+          </div>
+        </div>
+
+        <!-- Status Explanation -->
+        <div style="
+          background: #f9fafb;
+          padding: 10px;
+          border-radius: 6px;
+          border-left: 4px solid ${getStatusColor(
+            location.water_status,
+            hasResults
+          )};
+          margin-top: 10px;
+        ">
+          <div style="
+            font-size: 11px;
+            color: #4b5563;
+            line-height: 1.4;
+          ">
+            ${getStatusExplanation(location.water_status, hasResults)}
+          </div>
         </div>
       </div>
-    );
-  }
+    `;
+  };
 
-  if (error) {
+  // FIXED: Enhanced add markers function with proper marker storage
+  const addMarkers = () => {
+    if (!map.current || !locations.length) return;
+
+    console.log("📌 Adding markers...");
+
+    // Clear existing markers and popups
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+    popupsRef.current.forEach((popup) => popup.remove());
+    popupsRef.current = [];
+
+    // Calculate bounds for all locations
+    const bounds = new mapboxgl.LngLatBounds();
+
+    locations.forEach((location) => {
+      if (location.latitude && location.longitude) {
+        const hasResults = hasTestResults(location);
+        const lngLat = [location.longitude, location.latitude];
+
+        // Extend bounds
+        bounds.extend(lngLat);
+
+        // Create marker element - SIMPLIFIED VERSION
+        const el = document.createElement("div");
+        el.className = "custom-marker";
+        el.style.cssText = `
+          width: 28px; 
+          height: 28px; 
+          border-radius: 50%;
+          background-color: ${getStatusColor(
+            location.water_status,
+            hasResults
+          )};
+          border: 3px solid white; 
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          cursor: pointer;
+          position: relative;
+          z-index: 1;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          pointer-events: auto;
+        `;
+
+        // Create a container div for better positioning
+        const container = document.createElement("div");
+        container.style.cssText = `
+          position: absolute;
+          width: 28px;
+          height: 28px;
+          pointer-events: auto;
+          cursor: pointer;
+        `;
+        container.appendChild(el);
+
+        // Store the location data
+        el.dataset.locationId = location.id || location.full_name;
+
+        // Create marker using the container
+        const marker = new mapboxgl.Marker({
+          element: container,
+          anchor: "center",
+        })
+          .setLngLat(lngLat)
+          .addTo(map.current);
+
+        // FIXED: Add hover effect
+        container.addEventListener("mouseenter", () => {
+          el.style.zIndex = "2";
+          el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
+        });
+
+        container.addEventListener("mouseleave", () => {
+          el.style.zIndex = "1";
+          el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+        });
+
+        const openPopup = () => {
+          // Remove any existing popups
+          popupsRef.current.forEach((popup) => popup.remove());
+          popupsRef.current = [];
+
+          // Create new popup
+          const popup = new mapboxgl.Popup({
+            closeButton: true,
+            closeOnClick: true,
+            maxWidth: "350px",
+            offset: 25,
+            className: "water-quality-popup",
+          })
+            .setLngLat(lngLat)
+            .setHTML(createPopupContent(location))
+            .addTo(map.current);
+
+          popupsRef.current.push(popup);
+
+          // Focus on the marker when popup opens
+          map.current.flyTo({
+            center: lngLat,
+            zoom: 14,
+            duration: 1000,
+          });
+
+          // Remove popup from refs when it closes
+          popup.on("close", () => {
+            const index = popupsRef.current.indexOf(popup);
+            if (index > -1) {
+              popupsRef.current.splice(index, 1);
+            }
+          });
+        };
+
+        // Add click handler to both elements
+        container.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          openPopup();
+        });
+
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          openPopup();
+        });
+
+        markersRef.current.push(marker);
+      }
+    });
+
+    // Fit map to bounds if we have multiple locations
+    if (markersRef.current.length > 1) {
+      setTimeout(() => {
+        if (map.current) {
+          map.current.fitBounds(bounds, {
+            padding: 100,
+            maxZoom: 15,
+            duration: 2000,
+          });
+        }
+      }, 500);
+    } else if (markersRef.current.length === 1) {
+      // Center on single marker
+      setTimeout(() => {
+        if (map.current) {
+          map.current.flyTo({
+            center: [locations[0].longitude, locations[0].latitude],
+            zoom: 14,
+            duration: 1000,
+          });
+        }
+      }, 500);
+    }
+
+    console.log(`✅ Added ${markersRef.current.length} markers successfully!`);
+  };
+
+  // Error state
+  if (mapStatus === "error") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center bg-white p-8 rounded-lg shadow-md">
-          <div className="text-red-500 mb-4">
-            <svg
-              className="w-16 h-16 mx-auto"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.54-.833-2.310 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Error Loading Map
-          </h3>
-          <p className="text-gray-600">{error}</p>
+      <div
+        style={{
+          padding: "40px",
+          textAlign: "center",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#f9fafb",
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "white",
+            padding: "30px",
+            borderRadius: "10px",
+            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+            maxWidth: "400px",
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "20px" }}>⚠️</div>
+          <h2 style={{ color: "#ef4444", marginBottom: "15px" }}>Map Error</h2>
+          <p style={{ color: "#6b7280", marginBottom: "20px" }}>
+            Unable to load the map. Please check your connection and try again.
+          </p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            style={{
+              backgroundColor: "#3b82f6",
+              color: "white",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "5px",
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
           >
             Retry
           </button>
@@ -272,63 +544,284 @@ const MapView = () => {
   }
 
   return (
-    <div className="relative h-screen">
-      {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-sm shadow-sm">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center space-x-3">
+    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+      {/* Enhanced Header */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+          padding: "15px",
+          zIndex: 10,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            maxWidth: "1200px",
+            margin: "0 auto",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center" }}>
             <button
               onClick={() => window.history.back()}
-              className="text-gray-600 hover:text-gray-900 transition-colors"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.2)",
+                color: "white",
+                border: "none",
+                padding: "8px 12px",
+                borderRadius: "5px",
+                cursor: "pointer",
+                marginRight: "15px",
+                fontSize: "14px",
+              }}
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                />
-              </svg>
+              ← Back
             </button>
-            <h1 className="text-xl font-bold text-gray-900">
+            <strong style={{ fontSize: "18px" }}>
               Water Quality Map - Maasin, Southern Leyte
-            </h1>
+            </strong>
           </div>
-          <div className="text-sm text-gray-600">
-            {locations.length} monitoring location
-            {locations.length !== 1 ? "s" : ""}
+          <div style={{ fontSize: "14px", opacity: "0.9" }}>
+            {locations.length} monitoring locations
           </div>
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="absolute top-20 left-4 z-10 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 max-w-xs">
-        <h3 className="font-semibold text-gray-900 mb-3">
-          Water Status Legend
+      <div
+        style={{
+          position: "absolute",
+          top: "80px",
+          right: "15px",
+          backgroundColor: "rgba(255,255,255,0.95)",
+          padding: "15px",
+          borderRadius: "10px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          zIndex: 10,
+          minWidth: "200px",
+          backdropFilter: "blur(10px)",
+        }}
+      >
+        <h3
+          style={{
+            margin: "0 0 10px 0",
+            fontSize: "16px",
+            color: "#1f2937",
+          }}
+        >
+          Status Legend
         </h3>
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-green-500 border-2 border-white shadow"></div>
-            <span className="text-sm text-gray-700">Safe to drink</span>
+
+        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "10px" }}>
+          <div style={{ fontSize: "12px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                margin: "4px 0",
+              }}
+            >
+              <div
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#10b981",
+                  marginRight: "8px",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                }}
+              ></div>
+              <span>Safe to drink</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                margin: "4px 0",
+              }}
+            >
+              <div
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#f59e0b",
+                  marginRight: "8px",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                }}
+              ></div>
+              <span>Not drinkable</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                margin: "4px 0",
+              }}
+            >
+              <div
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#ef4444",
+                  marginRight: "8px",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                }}
+              ></div>
+              <span>Hazardous</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                margin: "4px 0",
+              }}
+            >
+              <div
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  backgroundColor: "#9ca3af",
+                  marginRight: "8px",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                }}
+              ></div>
+              <span>No sample yet</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-orange-500 border-2 border-white shadow"></div>
-            <span className="text-sm text-gray-700">Not drinkable</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow"></div>
-            <span className="text-sm text-gray-700">Hazardous</span>
-          </div>
+        </div>
+
+        {/* Instructions */}
+        <div
+          style={{
+            borderTop: "1px solid #e5e7eb",
+            paddingTop: "10px",
+            marginTop: "10px",
+            fontSize: "11px",
+            color: "#6b7280",
+          }}
+        >
+          💡 Click on any marker to view detailed information
         </div>
       </div>
 
-      {/* Map container */}
-      <div ref={mapContainer} className="w-full h-full" />
+      {/* Map Container */}
+      <div
+        ref={mapContainer}
+        style={{
+          width: "100%",
+          height: "100%",
+          backgroundColor: "#f0f0f0",
+        }}
+      />
+
+      {/* Enhanced Loading Overlay */}
+      {mapStatus === "creating" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(255,255,255,0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 20,
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                border: "4px solid #e5e7eb",
+                borderTop: "4px solid #3b82f6",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                margin: "0 auto 15px",
+              }}
+            ></div>
+            <p
+              style={{
+                margin: 0,
+                color: "#4b5563",
+                fontSize: "16px",
+                marginBottom: "5px",
+              }}
+            >
+              Loading Water Quality Map...
+            </p>
+            <p
+              style={{
+                margin: 0,
+                color: "#9ca3af",
+                fontSize: "12px",
+              }}
+            >
+              Initializing monitoring locations
+            </p>
+          </div>
+        </div>
+      )}
+
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          /* Add styles for popup close button */
+          .mapboxgl-popup-close-button {
+            font-size: 20px;
+            color: white;
+            right: 5px;
+            top: 5px;
+          }
+          
+          .mapboxgl-popup-content {
+            padding: 2;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          }
+          
+          /* Fix marker positioning */
+          .mapboxgl-marker {
+            position: absolute;
+            will-change: transform;
+          }
+          
+          .custom-marker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: translate(-50%, -50%);
+          }
+          
+          /* Ensure markers stay clickable */
+          .mapboxgl-marker-container {
+            pointer-events: auto !important;
+          }
+        `}
+      </style>
     </div>
   );
 };
