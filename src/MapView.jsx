@@ -7,10 +7,21 @@ import "mapbox-gl/dist/mapbox-gl.css";
 const MapView = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
-  const markersRef = useRef([]); // Store markers here
-  const popupsRef = useRef([]); // Store popups here
+  const markersRef = useRef([]);
+  const popupsRef = useRef([]);
   const [locations, setLocations] = useState([]);
   const [mapStatus, setMapStatus] = useState("initializing");
+
+  // NEW: Image viewer state
+  const [imageViewer, setImageViewer] = useState({
+    isOpen: false,
+    imageSrc: "",
+    locationName: "",
+    zoom: 1,
+    isDragging: false,
+    dragStart: { x: 0, y: 0 },
+    position: { x: 0, y: 0 },
+  });
 
   const MAPBOX_TOKEN =
     "pk.eyJ1IjoicmFsZDEyMDEwMiIsImEiOiJjbWttZGNyaWgwY3h3M2xzZmIwZ3VhYnM3In0.xkubwGBDjYnc41XB_7FT1g";
@@ -79,6 +90,193 @@ const MapView = () => {
     return bacteriaValue ? "#ef4444" : "#10b981";
   };
 
+  // NEW: Open image viewer
+  const openImageViewer = (imagePath, locationName) => {
+    setImageViewer({
+      isOpen: true,
+      imageSrc: imagePath,
+      locationName: locationName,
+      zoom: 1,
+      isDragging: false,
+      dragStart: { x: 0, y: 0 },
+      position: { x: 0, y: 0 },
+    });
+  };
+
+  // NEW: Close image viewer
+  const closeImageViewer = () => {
+    setImageViewer((prev) => ({
+      ...prev,
+      isOpen: false,
+      zoom: 1,
+      position: { x: 0, y: 0 },
+    }));
+  };
+
+  // NEW: Zoom functions
+  const zoomIn = () => {
+    setImageViewer((prev) => ({
+      ...prev,
+      zoom: Math.min(prev.zoom + 0.5, 5),
+    }));
+  };
+
+  const zoomOut = () => {
+    setImageViewer((prev) => ({
+      ...prev,
+      zoom: Math.max(prev.zoom - 0.5, 0.5),
+    }));
+  };
+
+  const resetZoom = () => {
+    setImageViewer((prev) => ({
+      ...prev,
+      zoom: 1,
+      position: { x: 0, y: 0 },
+    }));
+  };
+
+  // NEW: Download image
+  const downloadImage = () => {
+    const link = document.createElement("a");
+    link.href = imageViewer.imageSrc;
+    link.download = `${imageViewer.locationName
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase()}_water_source.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // NEW: Handle image dragging
+  const handleMouseDown = (e) => {
+    if (imageViewer.zoom > 1) {
+      setImageViewer((prev) => ({
+        ...prev,
+        isDragging: true,
+        dragStart: {
+          x: e.clientX - prev.position.x,
+          y: e.clientY - prev.position.y,
+        },
+      }));
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (imageViewer.isDragging && imageViewer.zoom > 1) {
+      setImageViewer((prev) => ({
+        ...prev,
+        position: {
+          x: e.clientX - prev.dragStart.x,
+          y: e.clientY - prev.dragStart.y,
+        },
+      }));
+    }
+  };
+
+  const handleMouseUp = () => {
+    setImageViewer((prev) => ({
+      ...prev,
+      isDragging: false,
+    }));
+  };
+
+  // NEW: Enhanced image display with click handler
+  const getImageDisplay = (imagePath, locationName) => {
+    if (!imagePath) {
+      return `
+        <div style="
+          width: 100%;
+          height: 150px;
+          background: linear-gradient(45deg, #f3f4f6, #e5e7eb);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+          margin-bottom: 10px;
+          color: #9ca3af;
+          font-size: 12px;
+        ">
+          📷 No image available
+        </div>
+      `;
+    }
+
+    return `
+      <div style="margin-bottom: 15px;">
+        <div class="image-container" onclick="window.openImageViewer('${imagePath}', '${locationName}')" style="
+          position: relative;
+          cursor: pointer;
+          border-radius: 6px;
+          overflow: hidden;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          transition: all 0.3s ease;
+        "
+        onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)'"
+        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
+        >
+          <img 
+            src="${imagePath}" 
+            alt="${locationName}"
+            style="
+              width: 100%;
+              height: 150px;
+              object-fit: cover;
+              display: block;
+            "
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+          />
+          <div style="
+            width: 100%;
+            height: 150px;
+            background: linear-gradient(45deg, #f3f4f6, #e5e7eb);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 12px;
+          ">
+            📷 Image not found
+          </div>
+          <div style="
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+          ">
+            🔍
+          </div>
+        </div>
+        <div style="
+          font-size: 10px;
+          color: #9ca3af;
+          text-align: center;
+          margin-top: 5px;
+        ">
+          📷 Click to view full size • Water source at ${locationName}
+        </div>
+      </div>
+    `;
+  };
+
+  // Make openImageViewer available globally for inline onclick
+  useEffect(() => {
+    window.openImageViewer = openImageViewer;
+    return () => {
+      delete window.openImageViewer;
+    };
+  }, []);
+
   // Fetch locations
   useEffect(() => {
     const fetchLocations = async () => {
@@ -87,6 +285,10 @@ const MapView = () => {
         if (response.success && response.data) {
           setLocations(response.data);
           console.log(`✅ Loaded ${response.data.length} locations`);
+          console.log(
+            "Locations with images:",
+            response.data.filter((loc) => loc.image_path)
+          );
         }
       } catch (err) {
         console.error("❌ Error:", err);
@@ -128,7 +330,6 @@ const MapView = () => {
         setMapStatus("error");
       });
 
-      // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl());
     } catch (error) {
       console.error("❌ Init error:", error);
@@ -137,7 +338,6 @@ const MapView = () => {
 
     return () => {
       if (map.current) {
-        // Clean up all markers and popups
         markersRef.current.forEach((marker) => marker.remove());
         markersRef.current = [];
         popupsRef.current.forEach((popup) => popup.remove());
@@ -173,7 +373,7 @@ const MapView = () => {
     }
   }, [locations, mapStatus]);
 
-  // Create popup content
+  // ENHANCED: Create popup content with clickable images
   const createPopupContent = (location) => {
     const hasResults = hasTestResults(location);
 
@@ -182,6 +382,7 @@ const MapView = () => {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         padding: 0;
         margin: 0;
+        max-width: 380px;
       ">
         <!-- Header -->
         <div style="
@@ -205,6 +406,9 @@ const MapView = () => {
             📍 ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
           </div>
         </div>
+
+        <!-- ENHANCED: Clickable Water Source Image -->
+        ${getImageDisplay(location.image_path, location.full_name)}
 
         <!-- Status Badge -->
         <div style="
@@ -341,7 +545,7 @@ const MapView = () => {
     `;
   };
 
-  // FIXED: Enhanced add markers function with proper marker storage
+  // Enhanced add markers function with proper marker storage
   const addMarkers = () => {
     if (!map.current || !locations.length) return;
 
@@ -406,7 +610,7 @@ const MapView = () => {
           .setLngLat(lngLat)
           .addTo(map.current);
 
-        // FIXED: Add hover effect
+        // Add hover effect
         container.addEventListener("mouseenter", () => {
           el.style.zIndex = "2";
           el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
@@ -422,11 +626,11 @@ const MapView = () => {
           popupsRef.current.forEach((popup) => popup.remove());
           popupsRef.current = [];
 
-          // Create new popup
+          // Create new popup with larger maxWidth for images
           const popup = new mapboxgl.Popup({
             closeButton: true,
             closeOnClick: true,
-            maxWidth: "350px",
+            maxWidth: "400px", // Increased for images
             offset: 25,
             className: "water-quality-popup",
           })
@@ -496,6 +700,37 @@ const MapView = () => {
     console.log(`✅ Added ${markersRef.current.length} markers successfully!`);
   };
 
+  // NEW: Handle keyboard shortcuts for image viewer
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!imageViewer.isOpen) return;
+
+      switch (e.key) {
+        case "Escape":
+          closeImageViewer();
+          break;
+        case "+":
+        case "=":
+          e.preventDefault();
+          zoomIn();
+          break;
+        case "-":
+          e.preventDefault();
+          zoomOut();
+          break;
+        case "0":
+          e.preventDefault();
+          resetZoom();
+          break;
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [imageViewer.isOpen]);
+
   // Error state
   if (mapStatus === "error") {
     return (
@@ -546,177 +781,66 @@ const MapView = () => {
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       {/* Enhanced Header */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white",
-          padding: "15px",
-          zIndex: 10,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            maxWidth: "1200px",
-            margin: "0 auto",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center" }}>
+      <div className="modern-header">
+        <div className="header-content">
+          <div className="header-left">
             <button
               onClick={() => window.history.back()}
-              style={{
-                backgroundColor: "rgba(255,255,255,0.2)",
-                color: "white",
-                border: "none",
-                padding: "8px 12px",
-                borderRadius: "5px",
-                cursor: "pointer",
-                marginRight: "15px",
-                fontSize: "14px",
-              }}
+              className="back-button"
             >
-              ← Back
+              ←
             </button>
-            <strong style={{ fontSize: "18px" }}>
-              Water Quality Map - Maasin, Southern Leyte
-            </strong>
+            <div className="header-title">
+              <h1>Water Quality Monitoring System</h1>
+              <p>Maasin, Southern Leyte</p>
+            </div>
           </div>
-          <div style={{ fontSize: "14px", opacity: "0.9" }}>
-            {locations.length} monitoring locations
+          <div className="header-stats">
+            <div className="stats-item">
+              <span className="stats-value">{locations.length}</span>
+              <span className="stats-label">Locations</span>
+            </div>
+            <div className="stats-item">
+              <span className="stats-value">{markersRef.current.length}</span>
+              <span className="stats-label">Markers</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          top: "80px",
-          right: "15px",
-          backgroundColor: "rgba(255,255,255,0.95)",
-          padding: "15px",
-          borderRadius: "10px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          zIndex: 10,
-          minWidth: "200px",
-          backdropFilter: "blur(10px)",
-        }}
-      >
-        <h3
-          style={{
-            margin: "0 0 10px 0",
-            fontSize: "16px",
-            color: "#1f2937",
-          }}
-        >
-          Status Legend
-        </h3>
-
-        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "10px" }}>
-          <div style={{ fontSize: "12px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                margin: "4px 0",
-              }}
-            >
-              <div
-                style={{
-                  width: "12px",
-                  height: "12px",
-                  borderRadius: "50%",
-                  backgroundColor: "#10b981",
-                  marginRight: "8px",
-                  border: "2px solid white",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                }}
-              ></div>
-              <span>Safe to drink</span>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                margin: "4px 0",
-              }}
-            >
-              <div
-                style={{
-                  width: "12px",
-                  height: "12px",
-                  borderRadius: "50%",
-                  backgroundColor: "#f59e0b",
-                  marginRight: "8px",
-                  border: "2px solid white",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                }}
-              ></div>
-              <span>Not drinkable</span>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                margin: "4px 0",
-              }}
-            >
-              <div
-                style={{
-                  width: "12px",
-                  height: "12px",
-                  borderRadius: "50%",
-                  backgroundColor: "#ef4444",
-                  marginRight: "8px",
-                  border: "2px solid white",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                }}
-              ></div>
-              <span>Hazardous</span>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                margin: "4px 0",
-              }}
-            >
-              <div
-                style={{
-                  width: "12px",
-                  height: "12px",
-                  borderRadius: "50%",
-                  backgroundColor: "#9ca3af",
-                  marginRight: "8px",
-                  border: "2px solid white",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                }}
-              ></div>
-              <span>No sample yet</span>
-            </div>
+      {/* Modern Legend Panel */}
+      <div className="modern-legend">
+        <div className="legend-header">
+          <div className="legend-icon">🗺️</div>
+          <div>
+            <h3>Map Legend</h3>
+            <p>Water quality indicators</p>
           </div>
         </div>
 
-        {/* Instructions */}
-        <div
-          style={{
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "10px",
-            marginTop: "10px",
-            fontSize: "11px",
-            color: "#6b7280",
-          }}
-        >
-          💡 Click on any marker to view detailed information
+        <div className="legend-items">
+          <div className="legend-item">
+            <div className="legend-color safe"></div>
+            <span>Safe to Drink</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color undrinkable"></div>
+            <span>Not Drinkable</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color hazard"></div>
+            <span>Hazardous</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color pending"></div>
+            <span>No Sample Yet</span>
+          </div>
+        </div>
+
+        <div className="legend-footer">
+          <div className="legend-tip">
+            Click markers for details • Click images to enlarge
+          </div>
         </div>
       </div>
 
@@ -730,7 +854,94 @@ const MapView = () => {
         }}
       />
 
-      {/* Enhanced Loading Overlay */}
+      {/* NEW: Image Viewer Modal */}
+      {imageViewer.isOpen && (
+        <div
+          className="image-viewer-overlay"
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* Image Viewer Controls */}
+          <div className="image-viewer-controls">
+            <div className="control-group">
+              <button
+                onClick={zoomOut}
+                className="control-btn"
+                title="Zoom Out (-)"
+              >
+                −
+              </button>
+              <span className="zoom-display">
+                {Math.round(imageViewer.zoom * 100)}%
+              </span>
+              <button
+                onClick={zoomIn}
+                className="control-btn"
+                title="Zoom In (+)"
+              >
+                +
+              </button>
+              <button
+                onClick={resetZoom}
+                className="control-btn"
+                title="Reset Zoom (0)"
+              >
+                ↻
+              </button>
+            </div>
+            <div className="control-group">
+              <button
+                onClick={downloadImage}
+                className="control-btn"
+                title="Download Image"
+              >
+                ↓
+              </button>
+              <button
+                onClick={closeImageViewer}
+                className="control-btn close-btn"
+                title="Close (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Image Container */}
+          <div className="image-viewer-container">
+            <img
+              src={imageViewer.imageSrc}
+              alt={imageViewer.locationName}
+              className="viewer-image"
+              style={{
+                transform: `scale(${imageViewer.zoom}) translate(${
+                  imageViewer.position.x / imageViewer.zoom
+                }px, ${imageViewer.position.y / imageViewer.zoom}px)`,
+                cursor:
+                  imageViewer.zoom > 1
+                    ? imageViewer.isDragging
+                      ? "grabbing"
+                      : "grab"
+                    : "default",
+              }}
+              onMouseDown={handleMouseDown}
+              draggable={false}
+            />
+          </div>
+
+          {/* Image Info */}
+          <div className="image-viewer-info">
+            <h3>{imageViewer.locationName}</h3>
+            <p>
+              Water Source Documentation • Use mouse wheel or +/- keys to zoom •
+              Drag to pan when zoomed
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
       {mapStatus === "creating" && (
         <div
           style={{
@@ -788,22 +999,327 @@ const MapView = () => {
             100% { transform: rotate(360deg); }
           }
           
-          /* Add styles for popup close button */
           .mapboxgl-popup-close-button {
             font-size: 20px;
             color: white;
             right: 5px;
             top: 5px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+          }
+
+          .modern-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+            color: white;
+            padding: 16px 24px;
+            z-index: 20;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          }
+          
+          .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          
+          .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+          }
+          
+          .back-button {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+          }
+          
+          .back-button:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateX(-2px);
+          }
+          
+          .header-title h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+          }
+          
+          .header-title p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            opacity: 0.9;
+          }
+          
+          .header-stats {
+            display: flex;
+            gap: 20px;
+          }
+          
+          .stats-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 16px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            min-width: 80px;
+          }
+          
+          .stats-value {
+            font-size: 20px;
+            font-weight: 700;
+          }
+          
+          .stats-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 4px;
+          }
+
+          .modern-legend {
+            position: absolute;
+            top: 110px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 20px;
+            width: 280px;
+            z-index: 20;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+          }
+          
+          .legend-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+          }
+          
+          .legend-icon {
+            font-size: 24px;
+            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+          }
+          
+          .legend-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+          }
+          
+          .legend-header p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #6b7280;
+          }
+          
+          .legend-items {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+          }
+          
+          .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: default;
+          }
+          
+          .legend-item:hover {
+            background: rgba(37, 99, 235, 0.05);
+          }
+          
+          .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+          
+          .legend-color.safe { background: #10b981; }
+          .legend-color.undrinkable { background: #f59e0b; }
+          .legend-color.hazard { background: #ef4444; }
+          .legend-color.pending { background: #9ca3af; }
+          
+          .legend-item span {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+          }
+          
+          .legend-footer {
+            padding-top: 16px;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+          }
+          
+          .legend-tip {
+            font-size: 12px;
+            color: #6b7280;
+            text-align: center;
+            line-height: 1.4;
+          }
+
+          /* NEW: Image Viewer Styles */
+          .image-viewer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+          }
+
+          .image-viewer-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+            z-index: 1001;
+          }
+
+          .control-group {
+            display: flex;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+          }
+
+          .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            min-width: 40px;
+          }
+
+          .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+          }
+
+          .close-btn {
+            background: rgba(239, 68, 68, 0.8) !important;
+          }
+
+          .close-btn:hover {
+            background: rgba(239, 68, 68, 1) !important;
+          }
+
+          .zoom-display {
+            color: white;
+            font-size: 12px;
+            padding: 10px 8px;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+          }
+
+          .image-viewer-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            position: relative;
+          }
+
+          .viewer-image {
+            max-width: 90vw;
+            max-height: 80vh;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+            user-select: none;
+          }
+
+          .image-viewer-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 80vw;
+          }
+
+          .image-viewer-info h3 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            font-weight: 600;
+          }
+
+          .image-viewer-info p {
+            margin: 0;
+            font-size: 12px;
+            opacity: 0.8;
+            line-height: 1.4;
           }
           
           .mapboxgl-popup-content {
-            padding: 2;
+            padding: 10px;
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-height: 80vh;
+            overflow-y: auto;
           }
           
-          /* Fix marker positioning */
           .mapboxgl-marker {
             position: absolute;
             will-change: transform;
@@ -816,9 +1332,37 @@ const MapView = () => {
             transform: translate(-50%, -50%);
           }
           
-          /* Ensure markers stay clickable */
           .mapboxgl-marker-container {
             pointer-events: auto !important;
+          }
+
+          /* Mouse wheel zoom for image viewer */
+          .image-viewer-container {
+            cursor: default;
+          }
+
+          @media (max-width: 768px) {
+            .image-viewer-controls {
+              top: 10px;
+              right: 10px;
+              flex-direction: column;
+              gap: 8px;
+            }
+            
+            .control-group {
+              padding: 6px;
+            }
+            
+            .image-viewer-info {
+              bottom: 10px;
+              padding: 12px 20px;
+              max-width: 90vw;
+            }
+            
+            .viewer-image {
+              max-width: 95vw;
+              max-height: 70vh;
+            }
           }
         `}
       </style>
