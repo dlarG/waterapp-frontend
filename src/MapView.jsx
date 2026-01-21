@@ -780,7 +780,6 @@ const MapView = () => {
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      {/* Enhanced Header */}
       <div className="modern-header">
         <div className="header-content">
           <div className="header-left">
@@ -808,7 +807,6 @@ const MapView = () => {
         </div>
       </div>
 
-      {/* Modern Legend Panel */}
       <div className="modern-legend">
         <div className="legend-header">
           <div className="legend-icon">🗺️</div>
