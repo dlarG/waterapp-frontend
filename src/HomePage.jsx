@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const HomePage = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsVisible(true);
   }, []);
+
+  const handleStartApplication = () => {
+    navigate("/map");
+  };
+
+  const handleViewMap = () => {
+    navigate("/map");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 overflow-hidden">
@@ -33,7 +43,10 @@ const HomePage = () => {
               <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl blur opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:animate-pulse-slow"></div>
                 <div className="absolute -inset-2 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-xl blur opacity-0 group-hover:opacity-30 transition-all duration-700"></div>
-                <button className="cursor-pointer relative bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-blue-500/30 group-hover:scale-105 animate-slideInRight">
+                <button
+                  onClick={handleStartApplication}
+                  className="cursor-pointer relative bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-blue-500/30 group-hover:scale-105 animate-slideInRight"
+                >
                   Start Application
                   <svg
                     className="inline-block w-4 h-4 ml-2 transition-transform duration-300 group-hover:translate-x-1"
@@ -78,7 +91,7 @@ const HomePage = () => {
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_110%)]"></div>
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="relative z-10 max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div
               className={`space-y-8 transition-all duration-1000 ${
@@ -109,6 +122,7 @@ const HomePage = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-6">
                 <button
+                  onClick={handleViewMap}
                   className="cursor-pointer group relative bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/40 transform hover:-translate-y-1 animate-slideInUp"
                   style={{ animationDelay: "300ms" }}
                 >
@@ -155,7 +169,7 @@ const HomePage = () => {
               </div>
             </div>
 
-            <div className="hidden lg:block relative">
+            <div className="hidden lg:block relative animate-slideInUp">
               <div className="absolute inset-0 bg-gradient-to-l from-blue-500/5 to-cyan-500/5 rounded-3xl backdrop-blur-sm border border-white/20"></div>
               <div className="relative h-full min-h-[500px]">
                 <div className="absolute inset-0 bg-gradient-to-l from-blue-500/5 to-cyan-500/5 rounded-3xl backdrop-blur-sm border border-white/20"></div>
@@ -165,107 +179,6 @@ const HomePage = () => {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slideInRight {
-          from {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0) translateX(0);
-          }
-          33% {
-            transform: translateY(-20px) translateX(20px);
-          }
-          66% {
-            transform: translateY(10px) translateX(-10px);
-          }
-        }
-
-        @keyframes gradient {
-          0%,
-          100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-
-        @keyframes pulse-slow {
-          0%,
-          100% {
-            opacity: 0.7;
-          }
-          50% {
-            opacity: 1;
-          }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 1s ease-out;
-        }
-
-        .animate-slideInUp {
-          animation: slideInUp 0.8s ease-out forwards;
-        }
-
-        .animate-slideInRight {
-          animation: slideInRight 0.8s ease-out;
-        }
-
-        .animate-float {
-          animation: float 15s ease-in-out infinite;
-        }
-
-        .animate-gradient {
-          animation: gradient 3s ease infinite;
-          background-size: 200% auto;
-        }
-
-        .animate-pulse-slow {
-          animation: pulse-slow 2s ease-in-out infinite;
-        }
-
-        .animation-delay-1000 {
-          animation-delay: 1s;
-        }
-
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-      `}</style>
     </div>
   );
 };
