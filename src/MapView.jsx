@@ -238,24 +238,6 @@ const MapView = () => {
           ">
             📷 Image not found
           </div>
-          <div style="
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            opacity: 0.8;
-            transition: opacity 0.3s ease;
-          ">
-            🔍
-          </div>
         </div>
         <div style="
           font-size: 10px;
@@ -263,7 +245,7 @@ const MapView = () => {
           text-align: center;
           margin-top: 5px;
         ">
-          📷 Click to view full size • Water source at ${locationName}
+           Click to view full size • Water source at ${locationName}
         </div>
       </div>
     `;
@@ -386,7 +368,7 @@ const MapView = () => {
       ">
         <!-- Header -->
         <div style="
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #0787ff 0%,rgb(51, 140, 223) 100%);
           color: white;
           padding: 15px;
           margin: -10px -10px 15px -10px;
@@ -444,7 +426,7 @@ const MapView = () => {
             display: flex;
             align-items: center;
           ">
-            📅 Sample Information
+            Sample Information
           </div>
           
           <div style="
@@ -485,7 +467,7 @@ const MapView = () => {
             display: flex;
             align-items: center;
           ">
-            🧪 Test Results
+            Test Results
           </div>
           
           <div style="

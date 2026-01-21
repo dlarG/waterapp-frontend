@@ -3,10 +3,11 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import HomePage from "./HomePage";
 import MapView from "./MapView";
-// import TestMapSimple from "./TestMapSimple";
+import Register from "./auth/Register";
+import Login from "./auth/Login";
 import "./App.css";
-// import MapViewFixed from "./MapViewFixed";
-// import MapViewSimple from "./MapViewSimple";
+import AuthPage from "./auth/AuthPage";
+import Dashboard from "./components/Dashboard";
 
 function App() {
   return (
@@ -16,9 +17,10 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/map" element={<MapView />} />
-            {/* <Route path="/test-map-simple" element={<TestMapSimple />} /> */}
-            {/* <Route path="/map-fixed" element={<MapViewFixed />} /> */}
-            {/* {/* <Route path="/map-simple" element={<MapViewSimple />} /> */}
+            <Route path="/register" element={<Register />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </div>
       </Router>

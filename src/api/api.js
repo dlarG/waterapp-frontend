@@ -48,6 +48,13 @@ export const adminAPI = {
       method: "POST",
       body: JSON.stringify(credentials),
     }),
+
+  // NEW: Register endpoint
+  register: (adminData) =>
+    apiRequest("/admin/register", {
+      method: "POST",
+      body: JSON.stringify(adminData),
+    }),
 };
 
 export default {

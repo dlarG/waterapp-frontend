@@ -10,6 +10,10 @@ const HomePage = () => {
     setIsVisible(true);
   }, []);
 
+  const handleLogin = () => {
+    navigate("/auth");
+  };
+
   const handleStartApplication = () => {
     navigate("/map");
   };
@@ -35,7 +39,10 @@ const HomePage = () => {
               </span>
             </div>
             <div className="flex items-center space-x-4">
-              <button className="cursor-pointer relative text-gray-700 hover:text-blue-600 px-4 py-2 font-medium transition-all duration-300 hover:scale-105 animate-slideInRight group">
+              <button
+                onClick={handleLogin}
+                className="cursor-pointer relative text-gray-700 hover:text-blue-600 px-4 py-2 font-medium transition-all duration-300 hover:scale-105 animate-slideInRight group"
+              >
                 <span className="relative z-10">Login</span>
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </button>
