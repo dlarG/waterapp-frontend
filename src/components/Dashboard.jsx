@@ -46,7 +46,7 @@ const Dashboard = () => {
   // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate("/login", { replace: true });
+      navigate("/auth", { replace: true });
     }
   }, [isAuthenticated, navigate]);
 

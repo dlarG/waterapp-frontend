@@ -18,6 +18,7 @@ import {
   FaArrowRight,
   FaUserPlus,
   FaSignInAlt,
+  FaIdCard,
 } from "react-icons/fa";
 
 const AuthPage = () => {
@@ -33,6 +34,7 @@ const AuthPage = () => {
   });
 
   const [registerForm, setRegisterForm] = useState({
+    fullName: "",
     username: "",
     email: "",
     password: "",
@@ -78,10 +80,22 @@ const AuthPage = () => {
   // Register validation
   const validateRegisterForm = () => {
     const newErrors = {};
+
+    if (!registerForm.fullName.trim()) {
+      newErrors.fullName = "Full name is required";
+    } else if (registerForm.fullName.trim().length < 2) {
+      newErrors.fullName = "Full name must be at least 2 characters";
+    } else if (!/^[a-zA-Z\s.,'-]+$/.test(registerForm.fullName.trim())) {
+      newErrors.fullName = "Full name contains invalid characters";
+    }
+
     if (!registerForm.username.trim()) {
       newErrors.username = "Username is required";
     } else if (registerForm.username.length < 3) {
       newErrors.username = "Username must be at least 3 characters";
+    } else if (!/^[a-zA-Z0-9_]+$/.test(registerForm.username)) {
+      newErrors.username =
+        "Username can only contain letters, numbers, and underscores";
     }
 
     if (!registerForm.email.trim()) {
@@ -94,6 +108,9 @@ const AuthPage = () => {
       newErrors.password = "Password is required";
     } else if (registerForm.password.length < 8) {
       newErrors.password = "Password must be at least 8 characters";
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(registerForm.password)) {
+      newErrors.password =
+        "Password must contain uppercase, lowercase, and number";
     }
 
     if (!registerForm.confirmPassword) {
@@ -157,6 +174,7 @@ const AuthPage = () => {
     setIsLoading(true);
     try {
       const result = await adminAPI.register({
+        fullName: registerForm.fullName.trim(),
         username: registerForm.username,
         email: registerForm.email,
         password: registerForm.password,
@@ -168,6 +186,7 @@ const AuthPage = () => {
           setIsLogin(true);
           setSuccess(false);
           setRegisterForm({
+            fullName: "",
             username: "",
             email: "",
             password: "",
@@ -196,8 +215,8 @@ const AuthPage = () => {
             Account Created Successfully!
           </h2>
           <p className="text-gray-600 mb-6">
-            Your admin account has been created. You can now sign in to access
-            the water monitoring dashboard.
+            Your admin account has been created. Please wait for approval from
+            the system administrator.
           </p>
           <div className="flex items-center justify-center space-x-3">
             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -257,6 +276,40 @@ const AuthPage = () => {
                 onSubmit={isLogin ? handleLoginSubmit : handleRegisterSubmit}
                 className="space-y-6"
               >
+                {/* Full Name Field (Register only) */}
+                {!isLogin && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <div className="flex items-center space-x-2">
+                        <FaIdCard className="w-4 h-4 text-blue-600" />
+                        <span>Full Name</span>
+                      </div>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="fullName"
+                        value={registerForm.fullName}
+                        onChange={handleRegisterChange}
+                        className={`w-full px-4 py-3 pl-12 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 ${
+                          errors.fullName
+                            ? "border-red-500 bg-red-50"
+                            : "border-gray-300"
+                        }`}
+                        placeholder="Enter your full name"
+                        disabled={isLoading}
+                      />
+                      <FaIdCard className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    </div>
+                    {errors.fullName && (
+                      <p className="mt-2 text-sm text-red-600 flex items-center space-x-2">
+                        <FaExclamationTriangle className="w-4 h-4" />
+                        <span>{errors.fullName}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Username Field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -363,7 +416,7 @@ const AuthPage = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="cursor-pointer absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       disabled={isLoading}
                     >
                       {showPassword ? (
@@ -443,7 +496,7 @@ const AuthPage = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:from-blue-700 hover:to-cyan-700 transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-3"
+                  className="cursor-pointer w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:from-blue-700 hover:to-cyan-700 transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-3"
                 >
                   {isLoading ? (
                     <>
@@ -460,7 +513,6 @@ const AuthPage = () => {
                         <FaUserPlus className="w-5 h-5" />
                       )}
                       <span>{isLogin ? "Sign In" : "Create Account"}</span>
-                      <FaArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
@@ -475,7 +527,7 @@ const AuthPage = () => {
                       type="button"
                       onClick={switchForm}
                       disabled={isLoading || isAnimating}
-                      className="ml-2 text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-300 disabled:opacity-50"
+                      className="cursor-pointer ml-2 text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-300 disabled:opacity-50"
                     >
                       {isLogin ? "Create Account" : "Sign In"}
                     </button>

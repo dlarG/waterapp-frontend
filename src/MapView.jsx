@@ -260,6 +260,7 @@ const MapView = () => {
   }, []);
 
   // Fetch locations
+  // Add this right after fetching locations (around line 280)
   useEffect(() => {
     const fetchLocations = async () => {
       try {
@@ -267,6 +268,18 @@ const MapView = () => {
         if (response.success && response.data) {
           setLocations(response.data);
           console.log(`✅ Loaded ${response.data.length} locations`);
+
+          // 🔍 DEBUG: Let's see what date/time data we're getting
+          response.data.forEach((loc, index) => {
+            console.log(`Location ${index + 1} (${loc.full_name}):`, {
+              sample_date: loc.sample_date,
+              sample_time: loc.sample_time,
+              date_type: typeof loc.sample_date,
+              time_type: typeof loc.sample_time,
+              raw_location: loc,
+            });
+          });
+
           console.log(
             "Locations with images:",
             response.data.filter((loc) => loc.image_path)
