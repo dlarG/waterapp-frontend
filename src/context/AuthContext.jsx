@@ -17,7 +17,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if admin is logged in (from localStorage)
     const savedAdmin = localStorage.getItem("admin");
     if (savedAdmin) {
       try {
