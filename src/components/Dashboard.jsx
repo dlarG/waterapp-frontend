@@ -126,14 +126,13 @@ const Dashboard = () => {
       }
     });
 
-    // Sort by date (most recent first) and take latest 5
     activities.sort((a, b) => b.date - a.date);
     setRecentActivity(activities.slice(0, 5));
   };
 
   const handleLogout = async () => {
     await logout();
-    navigate("/login", { replace: true });
+    navigate("/auth", { replace: true });
   };
 
   const formatDate = (date) => {

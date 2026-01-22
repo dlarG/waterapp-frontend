@@ -103,7 +103,7 @@ const Register = () => {
         setSuccess(true);
         // Redirect to login after 2 seconds
         setTimeout(() => {
-          navigate("/login");
+          navigate("/auth");
         }, 2000);
       } else {
         setErrors({ submit: result.error || "Registration failed" });
@@ -511,7 +511,7 @@ const Register = () => {
             {/* Login Link */}
             <div className="auth-footer">
               <p>Already have an account?</p>
-              <Link to="/login" className="auth-link">
+              <Link to="/auth" className="auth-link">
                 Sign In
               </Link>
             </div>
