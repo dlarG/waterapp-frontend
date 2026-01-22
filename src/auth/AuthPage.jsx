@@ -18,6 +18,7 @@ import {
   FaArrowRight,
   FaUserPlus,
   FaSignInAlt,
+  FaArrowLeft,
   FaIdCard,
 } from "react-icons/fa";
 
@@ -154,6 +155,10 @@ const AuthPage = () => {
     }
   };
 
+  const handleGoBack = () => {
+    navigate("/");
+  };
+
   // Register handlers
   const handleRegisterChange = (e) => {
     const { name, value } = e.target;
@@ -259,6 +264,12 @@ const AuthPage = () => {
               }`}
             >
               <div className="mb-8">
+                <button
+                  onClick={handleGoBack}
+                  className="cursor-pointer flex items-center space-x-2 text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-300"
+                >
+                  <FaArrowLeft className="w-4 h-4 text-blue-600" />
+                </button>
                 <div className="mt-6">
                   <h2 className="text-3xl font-bold text-gray-900">
                     {isLogin ? "Welcome Back" : "Create Account"}
@@ -634,34 +645,6 @@ const AuthPage = () => {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0) rotate(0deg);
-          }
-          50% {
-            transform: translateY(-20px) rotate(180deg);
-          }
-        }
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-float {
-          animation: float infinite ease-in-out;
-        }
-        .animate-fade-in {
-          animation: fade-in 0.5s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

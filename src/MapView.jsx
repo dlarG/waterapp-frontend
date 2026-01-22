@@ -8,6 +8,7 @@ const MapView = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef([]);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const popupsRef = useRef([]);
   const [locations, setLocations] = useState([]);
   const [mapStatus, setMapStatus] = useState("initializing");
@@ -26,6 +27,16 @@ const MapView = () => {
   const MAPBOX_TOKEN =
     "pk.eyJ1IjoicmFsZDEyMDEwMiIsImEiOiJjbWttZGNyaWgwY3h3M2xzZmIwZ3VhYnM3In0.xkubwGBDjYnc41XB_7FT1g";
 
+  // 🗺️ UPDATED: Maasin-focused configuration with proper bounds
+  const MAASIN_CONFIG = {
+    center: [124.748792, 10.108537], // Maasin, Southern Leyte - City Center
+    zoom: 14.5,
+    bounds: [
+      [124.748792, 10.108537], // Southwest corner
+      [124.943169, 10.250638], // Northeast corner
+    ],
+  };
+
   // Enhanced status color function with grey for no samples
   const getStatusColor = (status, hasResults) => {
     if (!hasResults) {
@@ -43,38 +54,85 @@ const MapView = () => {
     }
   };
 
-  // Check if location has test results
   const hasTestResults = (location) => {
     return location.coliform_bacteria !== null || location.e_coli !== null;
   };
 
-  // Format date for display
   const formatDate = (dateString) => {
-    if (!dateString) return "No sample date";
+    if (!dateString || dateString === null || dateString === undefined) {
+      return "No sample date";
+    }
+
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", {
+      let date;
+
+      if (typeof dateString === "string") {
+        if (dateString.includes("T") || dateString.includes("-")) {
+          date = new Date(dateString);
+        } else {
+          date = new Date(dateString);
+        }
+      } else if (dateString instanceof Date) {
+        date = dateString;
+      } else {
+        date = new Date(String(dateString));
+      }
+
+      if (isNaN(date.getTime())) {
+        console.warn("⚠️ Invalid date:", dateString);
+        return "Invalid date";
+      }
+
+      const formatted = date.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
       });
-    } catch {
-      return "Invalid date";
+
+      return formatted;
+    } catch (error) {
+      console.error("❌ Date formatting error:", error, "Input:", dateString);
+      return "Date error";
     }
   };
 
-  // Format time for display
+  // Enhanced time formatting with better error handling
   const formatTime = (timeString) => {
-    if (!timeString) return "No sample time";
+    if (!timeString || timeString === null || timeString === undefined) {
+      return "No sample time";
+    }
+
     try {
-      const timeParts = timeString.split(":");
-      const hours = parseInt(timeParts[0]);
-      const minutes = timeParts[1];
-      const ampm = hours >= 12 ? "PM" : "AM";
-      const displayHours = hours % 12 || 12;
-      return `${displayHours}:${minutes} ${ampm}`;
-    } catch {
-      return timeString || "Invalid time";
+      let timeStr = String(timeString).trim();
+
+      if (timeStr.includes(":")) {
+        const timeParts = timeStr.split(":");
+        const hours = parseInt(timeParts[0]);
+        const minutes = timeParts[1] || "00";
+
+        if (isNaN(hours) || hours < 0 || hours > 23) {
+          console.warn("⚠️ Invalid hours:", hours);
+          return "Invalid time";
+        }
+
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const displayHours = hours % 12 || 12;
+        const formatted = `${displayHours}:${minutes} ${ampm}`;
+
+        return formatted;
+      } else {
+        const hours = parseInt(timeStr);
+        if (!isNaN(hours) && hours >= 0 && hours <= 23) {
+          const ampm = hours >= 12 ? "PM" : "AM";
+          const displayHours = hours % 12 || 12;
+          return `${displayHours}:00 ${ampm}`;
+        }
+      }
+
+      return timeString;
+    } catch (error) {
+      console.error("❌ Time formatting error:", error, "Input:", timeString);
+      return "Time error";
     }
   };
 
@@ -259,31 +317,30 @@ const MapView = () => {
     };
   }, []);
 
-  // Fetch locations
-  // Add this right after fetching locations (around line 280)
+  // Fetch locations with debug info
   useEffect(() => {
     const fetchLocations = async () => {
       try {
         const response = await waterLocationAPI.getAll();
         if (response.success && response.data) {
           setLocations(response.data);
-          console.log(`✅ Loaded ${response.data.length} locations`);
 
           // 🔍 DEBUG: Let's see what date/time data we're getting
-          response.data.forEach((loc, index) => {
-            console.log(`Location ${index + 1} (${loc.full_name}):`, {
-              sample_date: loc.sample_date,
-              sample_time: loc.sample_time,
-              date_type: typeof loc.sample_date,
-              time_type: typeof loc.sample_time,
-              raw_location: loc,
-            });
-          });
+          // response.data.forEach((loc, index) => {
+          //   console.log(`Location ${index + 1} (${loc.full_name}):`, {
+          //     sample_date: loc.sample_date,
+          //     sample_time: loc.sample_time,
+          //     date_type: typeof loc.sample_date,
+          //     time_type: typeof loc.sample_time,
+          //     coordinates: [loc.longitude, loc.latitude],
+          //     raw_location: loc,
+          //   });
+          // });
 
-          console.log(
-            "Locations with images:",
-            response.data.filter((loc) => loc.image_path)
-          );
+          // console.log(
+          //   "Locations with images:",
+          //   response.data.filter((loc) => loc.image_path)
+          // );
         }
       } catch (err) {
         console.error("❌ Error:", err);
@@ -292,7 +349,7 @@ const MapView = () => {
     fetchLocations();
   }, []);
 
-  // Initialize map
+  // 🗺️ UPDATED: Initialize map with Maasin bounds and configuration
   useEffect(() => {
     if (map.current) return;
 
@@ -305,19 +362,23 @@ const MapView = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/standard-satellite",
-        center: [124.84, 10.14],
-        zoom: 12,
+        style: "mapbox://styles/mapbox/satellite-streets-v12", // Use satellite streets for better visibility
+        center: MAASIN_CONFIG.center,
+        zoom: MAASIN_CONFIG.zoom,
+        maxBounds: MAASIN_CONFIG.bounds, // 🔒 Lock map to Maasin area
+        maxBoundsViscosity: 1.0, // Prevent panning outside bounds
+        projection: "mercator",
         attributionControl: true,
         trackResize: true,
         preserveDrawingBuffer: false,
         antialias: false,
         optimizeForTerrain: false,
+        failIfMajorPerformanceCaveat: false, // Allow map to load even on slower devices
       });
 
       map.current.on("load", () => {
-        console.log("✅ Map loaded!");
         setMapStatus("loaded");
+        map.current.setMaxBounds(MAASIN_CONFIG.bounds);
       });
 
       map.current.on("error", (e) => {
@@ -325,9 +386,19 @@ const MapView = () => {
         setMapStatus("error");
       });
 
-      map.current.addControl(new mapboxgl.NavigationControl());
+      // Add navigation controls
+      map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+      // Add scale control
+      map.current.addControl(
+        new mapboxgl.ScaleControl({
+          maxWidth: 80,
+          unit: "metric",
+        }),
+        "bottom-left"
+      );
     } catch (error) {
-      console.error("❌ Init error:", error);
+      console.error("❌ Map initialization error:", error);
       setMapStatus("error");
     }
 
@@ -340,6 +411,7 @@ const MapView = () => {
         map.current.remove();
         map.current = null;
       }
+      delete window.resetMapToMaasin;
     };
   }, []);
 
@@ -398,7 +470,7 @@ const MapView = () => {
             font-size: 11px;
             opacity: 0.9;
           ">
-            📍 ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}
+            ${location.latitude?.toFixed(6)}, ${location.longitude?.toFixed(6)}
           </div>
         </div>
 
@@ -544,15 +616,13 @@ const MapView = () => {
   const addMarkers = () => {
     if (!map.current || !locations.length) return;
 
-    console.log("📌 Adding markers...");
-
     // Clear existing markers and popups
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
     popupsRef.current.forEach((popup) => popup.remove());
     popupsRef.current = [];
 
-    // Calculate bounds for all locations
+    // Calculate bounds for all locations within Maasin
     const bounds = new mapboxgl.LngLatBounds();
 
     locations.forEach((location) => {
@@ -560,139 +630,158 @@ const MapView = () => {
         const hasResults = hasTestResults(location);
         const lngLat = [location.longitude, location.latitude];
 
-        // Extend bounds
-        bounds.extend(lngLat);
+        // 🔍 Check if location is within Maasin bounds
+        const isInMaasin =
+          location.longitude >= MAASIN_CONFIG.bounds[0][0] &&
+          location.longitude <= MAASIN_CONFIG.bounds[1][0] &&
+          location.latitude >= MAASIN_CONFIG.bounds[0][1] &&
+          location.latitude <= MAASIN_CONFIG.bounds[1][1];
 
-        // Create marker element - SIMPLIFIED VERSION
-        const el = document.createElement("div");
-        el.className = "custom-marker";
-        el.style.cssText = `
-          width: 28px; 
-          height: 28px; 
-          border-radius: 50%;
-          background-color: ${getStatusColor(
-            location.water_status,
-            hasResults
-          )};
-          border: 3px solid white; 
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-          cursor: pointer;
-          position: relative;
-          z-index: 1;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          pointer-events: auto;
-        `;
+        // Only add markers for locations within Maasin bounds
+        if (isInMaasin) {
+          bounds.extend(lngLat);
 
-        // Create a container div for better positioning
-        const container = document.createElement("div");
-        container.style.cssText = `
-          position: absolute;
-          width: 28px;
-          height: 28px;
-          pointer-events: auto;
-          cursor: pointer;
-        `;
-        container.appendChild(el);
+          // Create marker element - SIMPLIFIED VERSION
+          const el = document.createElement("div");
+          el.className = "custom-marker";
+          el.style.cssText = `
+            width: 28px; 
+            height: 28px; 
+            border-radius: 50%;
+            background-color: ${getStatusColor(
+              location.water_status,
+              hasResults
+            )};
+            border: 3px solid white; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            pointer-events: auto;
+          `;
 
-        // Store the location data
-        el.dataset.locationId = location.id || location.full_name;
+          // Create a container div for better positioning
+          const container = document.createElement("div");
+          container.style.cssText = `
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            pointer-events: auto;
+            cursor: pointer;
+          `;
+          container.appendChild(el);
 
-        // Create marker using the container
-        const marker = new mapboxgl.Marker({
-          element: container,
-          anchor: "center",
-        })
-          .setLngLat(lngLat)
-          .addTo(map.current);
+          // Store the location data
+          el.dataset.locationId = location.id || location.full_name;
 
-        // Add hover effect
-        container.addEventListener("mouseenter", () => {
-          el.style.zIndex = "2";
-          el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
-        });
-
-        container.addEventListener("mouseleave", () => {
-          el.style.zIndex = "1";
-          el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
-        });
-
-        const openPopup = () => {
-          // Remove any existing popups
-          popupsRef.current.forEach((popup) => popup.remove());
-          popupsRef.current = [];
-
-          // Create new popup with larger maxWidth for images
-          const popup = new mapboxgl.Popup({
-            closeButton: true,
-            closeOnClick: true,
-            maxWidth: "400px", // Increased for images
-            offset: 25,
-            className: "water-quality-popup",
+          // Create marker using the container
+          const marker = new mapboxgl.Marker({
+            element: container,
+            anchor: "center",
           })
             .setLngLat(lngLat)
-            .setHTML(createPopupContent(location))
             .addTo(map.current);
 
-          popupsRef.current.push(popup);
-
-          // Focus on the marker when popup opens
-          map.current.flyTo({
-            center: lngLat,
-            zoom: 14,
-            duration: 1000,
+          // Add hover effect
+          container.addEventListener("mouseenter", () => {
+            el.style.transform = "scale(1.2)";
+            el.style.zIndex = "2";
+            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
           });
 
-          // Remove popup from refs when it closes
-          popup.on("close", () => {
-            const index = popupsRef.current.indexOf(popup);
-            if (index > -1) {
-              popupsRef.current.splice(index, 1);
-            }
+          container.addEventListener("mouseleave", () => {
+            el.style.transform = "scale(1)";
+            el.style.zIndex = "1";
+            el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
           });
-        };
 
-        // Add click handler to both elements
-        container.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          openPopup();
-        });
+          const openPopup = () => {
+            // Remove any existing popups
+            popupsRef.current.forEach((popup) => popup.remove());
+            popupsRef.current = [];
 
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          openPopup();
-        });
+            // Create new popup with larger maxWidth for images
+            const popup = new mapboxgl.Popup({
+              closeButton: true,
+              closeOnClick: true,
+              maxWidth: "400px", // Increased for images
+              offset: 25,
+              className: "water-quality-popup",
+            })
+              .setLngLat(lngLat)
+              .setHTML(createPopupContent(location))
+              .addTo(map.current);
 
-        markersRef.current.push(marker);
+            popupsRef.current.push(popup);
+
+            // Focus on the marker when popup opens
+            map.current.flyTo({
+              center: lngLat,
+              zoom: Math.max(map.current.getZoom(), 16),
+              duration: 1000,
+            });
+
+            // Remove popup from refs when it closes
+            popup.on("close", () => {
+              const index = popupsRef.current.indexOf(popup);
+              if (index > -1) {
+                popupsRef.current.splice(index, 1);
+              }
+            });
+          };
+
+          // Add click handler to both elements
+          container.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openPopup();
+          });
+
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openPopup();
+          });
+
+          markersRef.current.push(marker);
+        }
       }
     });
 
-    // Fit map to bounds if we have multiple locations
+    // Fit map to bounds if we have multiple locations within Maasin
     if (markersRef.current.length > 1) {
       setTimeout(() => {
         if (map.current) {
           map.current.fitBounds(bounds, {
-            padding: 100,
-            maxZoom: 15,
+            padding: 50,
+            maxZoom: 16,
             duration: 2000,
           });
         }
       }, 500);
     } else if (markersRef.current.length === 1) {
       // Center on single marker
-      setTimeout(() => {
-        if (map.current) {
-          map.current.flyTo({
-            center: [locations[0].longitude, locations[0].latitude],
-            zoom: 14,
-            duration: 1000,
-          });
-        }
-      }, 500);
-    }
+      const firstLocation = locations.find(
+        (loc) =>
+          loc.longitude >= MAASIN_CONFIG.bounds[0][0] &&
+          loc.longitude <= MAASIN_CONFIG.bounds[1][0] &&
+          loc.latitude >= MAASIN_CONFIG.bounds[0][1] &&
+          loc.latitude <= MAASIN_CONFIG.bounds[1][1]
+      );
 
-    console.log(`✅ Added ${markersRef.current.length} markers successfully!`);
+      if (firstLocation) {
+        setTimeout(() => {
+          if (map.current) {
+            map.current.flyTo({
+              center: [firstLocation.longitude, firstLocation.latitude],
+              zoom: 15,
+              duration: 1000,
+            });
+          }
+        }, 500);
+      }
+    }
   };
 
   // NEW: Handle keyboard shortcuts for image viewer
@@ -752,7 +841,8 @@ const MapView = () => {
           <div style={{ fontSize: "48px", marginBottom: "20px" }}>⚠️</div>
           <h2 style={{ color: "#ef4444", marginBottom: "15px" }}>Map Error</h2>
           <p style={{ color: "#6b7280", marginBottom: "20px" }}>
-            Unable to load the map. Please check your connection and try again.
+            Unable to load the Maasin water monitoring map. Please check your
+            connection and try again.
           </p>
           <button
             onClick={() => window.location.reload()}
@@ -785,29 +875,41 @@ const MapView = () => {
               ←
             </button>
             <div className="header-title">
-              <h1>Water Quality Monitoring System</h1>
-              <p>Maasin, Southern Leyte</p>
+              <h1>Water Quality Monitoring - Maasin City</h1>
+              <p>Southern Leyte, Philippines</p>
             </div>
           </div>
           <div className="header-stats">
             <div className="stats-item">
               <span className="stats-value">{locations.length}</span>
-              <span className="stats-label">Locations</span>
-            </div>
-            <div className="stats-item">
-              <span className="stats-value">{markersRef.current.length}</span>
-              <span className="stats-label">Markers</span>
+              <span className="stats-label">Total Locations</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="modern-legend">
+      {/* Legend Toggle Button */}
+      <button
+        onClick={() => setIsLegendOpen(!isLegendOpen)}
+        className="legend-toggle-btn"
+        title={isLegendOpen ? "Hide Legend" : "Show Legend"}
+      >
+        <span className="legend-toggle-icon">{isLegendOpen ? "✕" : "🗺️"}</span>
+        <span className="legend-toggle-text">
+          {isLegendOpen ? "Hide" : "Legend"}
+        </span>
+      </button>
+
+      {/* Collapsible Legend */}
+      <div
+        className={`modern-legend ${
+          isLegendOpen ? "legend-open" : "legend-closed"
+        }`}
+      >
         <div className="legend-header">
           <div className="legend-icon">🗺️</div>
           <div>
-            <h3>Map Legend</h3>
-            <p>Water quality indicators</p>
+            <h3>Maasin Water Quality</h3>
           </div>
         </div>
 
@@ -818,7 +920,7 @@ const MapView = () => {
           </div>
           <div className="legend-item">
             <div className="legend-color undrinkable"></div>
-            <span>Not Drinkable</span>
+            <span>Needs Treatment</span>
           </div>
           <div className="legend-item">
             <div className="legend-color hazard"></div>
@@ -829,15 +931,8 @@ const MapView = () => {
             <span>No Sample Yet</span>
           </div>
         </div>
-
-        <div className="legend-footer">
-          <div className="legend-tip">
-            Click markers for details • Click images to enlarge
-          </div>
-        </div>
       </div>
 
-      {/* Map Container */}
       <div
         ref={mapContainer}
         style={{
@@ -925,9 +1020,9 @@ const MapView = () => {
 
           {/* Image Info */}
           <div className="image-viewer-info">
-            <h3>{imageViewer.locationName}</h3>
+            <h3>📷 {imageViewer.locationName}</h3>
             <p>
-              Water Source Documentation • Use mouse wheel or +/- keys to zoom •
+              Water Source in Maasin City • Use +/- keys or buttons to zoom •
               Drag to pan when zoomed
             </p>
           </div>
@@ -943,7 +1038,7 @@ const MapView = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(255,255,255,0.9)",
+            background: "rgba(255,255,255,0.95)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -970,7 +1065,7 @@ const MapView = () => {
                 marginBottom: "5px",
               }}
             >
-              Loading Water Quality Map...
+              Loading Maasin Water Quality Map...
             </p>
             <p
               style={{
@@ -979,7 +1074,7 @@ const MapView = () => {
                 fontSize: "12px",
               }}
             >
-              Initializing monitoring locations
+              Focusing on Maasin City, Southern Leyte
             </p>
           </div>
         </div>
@@ -1010,7 +1105,7 @@ const MapView = () => {
             right: 0;
             background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
             color: white;
-            padding: 16px 24px;
+            padding: 5px 24px;
             z-index: 20;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
           }
@@ -1062,7 +1157,8 @@ const MapView = () => {
           
           .header-stats {
             display: flex;
-            gap: 20px;
+            gap: 15px;
+            align-items: center;
           }
           
           .stats-item {
@@ -1070,7 +1166,7 @@ const MapView = () => {
             flex-direction: column;
             align-items: center;
             background: rgba(255, 255, 255, 0.1);
-            padding: 10px 16px;
+            padding: 5px 10px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
             min-width: 80px;
@@ -1087,9 +1183,49 @@ const MapView = () => {
             margin-top: 4px;
           }
 
+          /* Legend Toggle Button */
+          .legend-toggle-btn {
+            position: absolute;
+            top: 80px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            z-index: 21;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 100px;
+            justify-content: center;
+          }
+
+          .legend-toggle-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+          }
+
+          .legend-toggle-icon {
+            font-size: 16px;
+            transition: transform 0.3s ease;
+          }
+
+          .legend-toggle-text {
+            font-size: 13px;
+          }
+
+          /* Updated Legend Styles */
           .modern-legend {
             position: absolute;
-            top: 110px;
+            top: 130px;
             right: 10px;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(20px);
@@ -1099,6 +1235,21 @@ const MapView = () => {
             z-index: 20;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: top right;
+          }
+
+          .legend-open {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            visibility: visible;
+          }
+
+          .legend-closed {
+            opacity: 0;
+            transform: scale(0.9) translateY(-20px);
+            visibility: hidden;
+            pointer-events: none;
           }
           
           .legend-header {
@@ -1127,12 +1278,6 @@ const MapView = () => {
             font-size: 18px;
             font-weight: 700;
             color: #1f2937;
-          }
-          
-          .legend-header p {
-            margin: 4px 0 0;
-            font-size: 13px;
-            color: #6b7280;
           }
           
           .legend-items {
@@ -1173,18 +1318,6 @@ const MapView = () => {
             font-size: 14px;
             font-weight: 500;
             color: #374151;
-          }
-          
-          .legend-footer {
-            padding-top: 16px;
-            border-top: 1px solid rgba(0, 0, 0, 0.1);
-          }
-          
-          .legend-tip {
-            font-size: 12px;
-            color: #6b7280;
-            text-align: center;
-            line-height: 1.4;
           }
 
           /* NEW: Image Viewer Styles */
@@ -1322,19 +1455,40 @@ const MapView = () => {
             position: absolute;
             top: 0;
             left: 0;
-            transform: translate(-50%, -50%);
           }
           
           .mapboxgl-marker-container {
             pointer-events: auto !important;
           }
 
-          /* Mouse wheel zoom for image viewer */
-          .image-viewer-container {
-            cursor: default;
-          }
-
           @media (max-width: 768px) {
+            .header-stats {
+              flex-direction: column;
+              gap: 8px;
+            }
+            
+            .stats-item {
+              min-width: 60px;
+              padding: 8px 12px;
+            }
+            
+            .legend-toggle-btn {
+              right: 5px;
+              top: 90px;
+              min-width: 80px;
+              padding: 10px 12px;
+            }
+
+            .legend-toggle-text {
+              font-size: 12px;
+            }
+            
+            .modern-legend {
+              width: 250px;
+              right: 5px;
+              top: 140px;
+            }
+            
             .image-viewer-controls {
               top: 10px;
               right: 10px;

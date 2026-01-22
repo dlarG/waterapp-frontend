@@ -12,6 +12,8 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "axios": "^1.13.2",
+    "framer-motion": "^12.28.1",
+    "lucide-react": "^0.562.0",
     "mapbox-gl": "^3.18.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

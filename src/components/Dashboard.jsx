@@ -469,7 +469,10 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="p-6">
+              <div
+                className="p-3 overflow-y-auto"
+                style={{ maxHeight: "200px" }}
+              >
                 <div className="space-y-4">
                   {recentActivity.length > 0 ? (
                     recentActivity.map((activity, index) => (
