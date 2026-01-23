@@ -27,7 +27,6 @@ const MapView = () => {
   const MAPBOX_TOKEN =
     "pk.eyJ1IjoicmFsZDEyMDEwMiIsImEiOiJjbWttZGNyaWgwY3h3M2xzZmIwZ3VhYnM3In0.xkubwGBDjYnc41XB_7FT1g";
 
-  // 🗺️ UPDATED: Maasin-focused configuration with proper bounds
   const MAASIN_CONFIG = {
     center: [124.748792, 10.108537], // Maasin, Southern Leyte - City Center
     zoom: 14.5,
