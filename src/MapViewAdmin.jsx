@@ -24,8 +24,7 @@ const MapView = () => {
     position: { x: 0, y: 0 },
   });
 
-  const MAPBOX_TOKEN =
-    "pk.eyJ1IjoicmFsZDEyMDEwMiIsImEiOiJjbWttZGNyaWgwY3h3M2xzZmIwZ3VhYnM3In0.xkubwGBDjYnc41XB_7FT1g";
+  const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_KEY;
 
   // 🗺️ UPDATED: Maasin-focused configuration with proper bounds
   const MAASIN_CONFIG = {
@@ -274,7 +273,7 @@ const MapView = () => {
         onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
         >
           <img 
-            src="${imagePath}" 
+            src="/${imagePath}" 
             alt="${locationName}"
             style="
               width: 100%;
