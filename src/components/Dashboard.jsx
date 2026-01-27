@@ -229,7 +229,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Welcome back,</p>
-                  <p className="font-bold">{user?.username || "Admin"}</p>
+                  <p className="font-bold">{user?.full_name || "Admin User"}</p>
                 </div>
               </div>
               <button
@@ -386,7 +386,7 @@ const Dashboard = () => {
               <div className="p-6">
                 <div className="grid grid-cols-2 gap-4">
                   <button
-                    onClick={() => navigate("/map")}
+                    onClick={() => navigate("/admin/map")}
                     className="group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100"
                   >
                     <div className="flex items-center space-x-4">
