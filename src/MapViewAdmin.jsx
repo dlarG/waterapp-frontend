@@ -998,7 +998,7 @@ const MapView = () => {
           {/* Image Container */}
           <div className="image-viewer-container">
             <img
-              src={imageViewer.imageSrc}
+              src={`/${imageViewer.imageSrc}`}
               alt={imageViewer.locationName}
               className="viewer-image"
               style={{
@@ -1019,7 +1019,7 @@ const MapView = () => {
 
           {/* Image Info */}
           <div className="image-viewer-info">
-            <h3>📷 {imageViewer.locationName}</h3>
+            <h3>{imageViewer.locationName}</h3>
             <p>
               Water Source in Maasin City • Use +/- keys or buttons to zoom •
               Drag to pan when zoomed
@@ -1028,7 +1028,6 @@ const MapView = () => {
         </div>
       )}
 
-      {/* Loading Overlay */}
       {mapStatus === "creating" && (
         <div
           style={{
