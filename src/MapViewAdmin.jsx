@@ -8,7 +8,6 @@ const MapView = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef([]);
-  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const popupsRef = useRef([]);
   const [locations, setLocations] = useState([]);
   const [mapStatus, setMapStatus] = useState("initializing");
@@ -887,51 +886,6 @@ const MapView = () => {
         </div>
       </div>
 
-      {/* Legend Toggle Button */}
-      <button
-        onClick={() => setIsLegendOpen(!isLegendOpen)}
-        className="legend-toggle-btn"
-        title={isLegendOpen ? "Hide Legend" : "Show Legend"}
-      >
-        <span className="legend-toggle-icon">{isLegendOpen ? "✕" : "🗺️"}</span>
-        <span className="legend-toggle-text">
-          {isLegendOpen ? "Hide" : "Legend"}
-        </span>
-      </button>
-
-      {/* Collapsible Legend */}
-      <div
-        className={`modern-legend ${
-          isLegendOpen ? "legend-open" : "legend-closed"
-        }`}
-      >
-        <div className="legend-header">
-          <div className="legend-icon">🗺️</div>
-          <div>
-            <h3>Maasin Water Quality</h3>
-          </div>
-        </div>
-
-        <div className="legend-items">
-          <div className="legend-item">
-            <div className="legend-color safe"></div>
-            <span>Safe to Drink</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color undrinkable"></div>
-            <span>Needs Treatment</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color hazard"></div>
-            <span>Hazardous</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color pending"></div>
-            <span>No Sample Yet</span>
-          </div>
-        </div>
-      </div>
-
       <div
         ref={mapContainer}
         style={{
@@ -1181,142 +1135,7 @@ const MapView = () => {
             margin-top: 4px;
           }
 
-          /* Legend Toggle Button */
-          .legend-toggle-btn {
-            position: absolute;
-            top: 80px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            padding: 12px 16px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            color: #374151;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-            z-index: 21;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 100px;
-            justify-content: center;
-          }
-
-          .legend-toggle-btn:hover {
-            background: rgba(255, 255, 255, 1);
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-          }
-
-          .legend-toggle-icon {
-            font-size: 16px;
-            transition: transform 0.3s ease;
-          }
-
-          .legend-toggle-text {
-            font-size: 13px;
-          }
-
-          /* Updated Legend Styles */
-          .modern-legend {
-            position: absolute;
-            top: 130px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border-radius: 16px;
-            padding: 20px;
-            width: 280px;
-            z-index: 20;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-origin: top right;
-          }
-
-          .legend-open {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-            visibility: visible;
-          }
-
-          .legend-closed {
-            opacity: 0;
-            transform: scale(0.9) translateY(-20px);
-            visibility: hidden;
-            pointer-events: none;
-          }
           
-          .legend-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-          }
-          
-          .legend-icon {
-            font-size: 24px;
-            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-          }
-          
-          .legend-header h3 {
-            margin: 0;
-            font-size: 18px;
-            font-weight: 700;
-            color: #1f2937;
-          }
-          
-          .legend-items {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 20px;
-          }
-          
-          .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            cursor: default;
-          }
-          
-          .legend-item:hover {
-            background: rgba(37, 99, 235, 0.05);
-          }
-          
-          .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          }
-          
-          .legend-color.safe { background: #10b981; }
-          .legend-color.undrinkable { background: #f59e0b; }
-          .legend-color.hazard { background: #ef4444; }
-          .legend-color.pending { background: #9ca3af; }
-          
-          .legend-item span {
-            font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-          }
 
           /* NEW: Image Viewer Styles */
           .image-viewer-overlay {

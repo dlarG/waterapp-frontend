@@ -126,3 +126,9 @@
   height: 100%;
   min-height: 100vh;
 }
+
+.mapboxgl-popup-close-button {
+  margin-top: 10px;
+  margin-right: 10px;
+  font-size: 20px;
+}
