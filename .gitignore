@@ -24,3 +24,19 @@ dist-ssr
 *.sw?
 
 .env
+.env.local
+.env.*.local
+coverage
+.cache
+.next
+out
+build
+.nuxt
+.nuxt-storybook
+.storybook/dist
+storybook-static
+.jspm-cache
+.webpack
+.cache-loader
+.babelrc.js
+.pnp.*  
