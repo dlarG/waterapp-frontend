@@ -387,7 +387,7 @@ const Dashboard = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => navigate("/admin/map")}
-                    className="group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100"
+                    className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100"
                   >
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">
@@ -402,7 +402,7 @@ const Dashboard = () => {
                     </div>
                   </button>
 
-                  <button className="group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
+                  <button className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">
                         <FaChartBar className="w-6 h-6 text-white" />
@@ -416,7 +416,7 @@ const Dashboard = () => {
                     </div>
                   </button>
 
-                  <button className="group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
+                  <button className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">
                         <FaPlus className="w-6 h-6 text-white" />
@@ -432,7 +432,7 @@ const Dashboard = () => {
                     </div>
                   </button>
 
-                  <button className="group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
+                  <button className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">
                         <FaVial className="w-6 h-6 text-white" />
@@ -663,15 +663,17 @@ const Dashboard = () => {
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="p-2 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg">
-                <FaWater className="w-5 h-5 text-white" />
-              </div>
+              <img
+                src="/images/logo/logo-circled.png"
+                alt=""
+                className="w-10 h-10"
+              />
               <div>
                 <p className="font-medium text-gray-900">
                   Water Quality Monitor
                 </p>
                 <p className="text-sm text-gray-600">
-                  Maasin, Southern Leyte © 2024
+                  Maasin, Southern Leyte © 2026
                 </p>
               </div>
             </div>

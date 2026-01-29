@@ -1,17 +1,291 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import { waterLocationAPI } from "./api/api";
+import { waterLocationAPI, householdAPI } from "./api/api";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 const MapView = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef([]);
-  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const popupsRef = useRef([]);
   const [locations, setLocations] = useState([]);
   const [mapStatus, setMapStatus] = useState("initializing");
+
+  const [viewMode, setViewMode] = useState("markers"); // "markers" or "heatmap"
+  // eslint-disable-next-line no-unused-vars
+  const [householdData, setHouseholdData] = useState([]);
+  const [riskData, setRiskData] = useState([]);
+  const [heatmapLoading, setHeatmapLoading] = useState(false);
+
+  const fetchHouseholdData = async () => {
+    try {
+      setHeatmapLoading(true);
+      console.log("🔍 Starting household data fetch...");
+
+      const [householdsResponse, riskResponse] = await Promise.all([
+        householdAPI.getAll(),
+        householdAPI.getRiskAnalysis(),
+      ]);
+
+      console.log("🏠 Households response:", householdsResponse);
+      console.log("🎯 Risk response:", riskResponse);
+
+      if (householdsResponse.success) {
+        setHouseholdData(householdsResponse.data);
+        console.log(
+          `✅ Loaded ${householdsResponse.data.length} household clusters`
+        );
+      } else {
+        console.error(
+          "❌ Households request failed:",
+          householdsResponse.error
+        );
+      }
+
+      if (riskResponse.success) {
+        setRiskData(riskResponse.data);
+        console.log(`✅ Loaded ${riskResponse.data.length} risk zones`);
+      } else {
+        console.error("❌ Risk analysis request failed:", riskResponse.error);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching household data:", error);
+      alert(`Error loading heatmap data: ${error.message}`);
+    } finally {
+      setHeatmapLoading(false);
+    }
+  };
+
+  // NEW: Add heatmap layer
+  const addHeatmapLayer = () => {
+    console.log("🗺️ Adding heatmap layer...");
+    console.log("Map available:", !!map.current);
+    console.log("Risk data length:", riskData.length);
+
+    if (!map.current) {
+      console.error("❌ Map not available");
+      return;
+    }
+
+    if (!riskData.length) {
+      console.error("❌ No risk data available");
+      alert(
+        "No risk data available for heatmap. Please ensure you have contaminated water sources and household data."
+      );
+      return;
+    }
+
+    // Remove existing heatmap layer if it exists
+    if (map.current.getLayer("household-heatmap")) {
+      console.log("🗑️ Removing existing heatmap layer");
+      map.current.removeLayer("household-heatmap");
+    }
+    if (map.current.getSource("household-heatmap")) {
+      map.current.removeSource("household-heatmap");
+    }
+    if (map.current.getLayer("household-risk-points")) {
+      map.current.removeLayer("household-risk-points");
+    }
+
+    console.log("📊 Creating heatmap with", riskData.length, "risk points");
+
+    // Prepare GeoJSON data for heatmap
+    const heatmapData = {
+      type: "FeatureCollection",
+      features: riskData.map((point) => ({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [point.longitude, point.latitude],
+        },
+        properties: {
+          risk_score: point.risk_score,
+          household_count: point.household_count,
+          water_source: point.water_source,
+          contamination: point.contamination_type,
+        },
+      })),
+    };
+
+    // Add heatmap source
+    map.current.addSource("household-heatmap", {
+      type: "geojson",
+      data: heatmapData,
+    });
+
+    // Add heatmap layer
+    map.current.addLayer({
+      id: "household-heatmap",
+      type: "heatmap",
+      source: "household-heatmap",
+      maxzoom: 18,
+      paint: {
+        // Increase the heatmap weight based on risk score
+        "heatmap-weight": [
+          "interpolate",
+          ["linear"],
+          ["get", "risk_score"],
+          0,
+          0,
+          50,
+          1,
+        ],
+        // Increase the heatmap color intensity based on zoom level
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 18, 3],
+        // Color ramp for heatmap - red indicates higher risk
+        "heatmap-color": [
+          "interpolate",
+          ["linear"],
+          ["heatmap-density"],
+          0,
+          "rgba(33,102,172,0)",
+          0.2,
+          "rgb(103,169,207)",
+          0.4,
+          "rgb(209,229,240)",
+          0.6,
+          "rgb(253,219,199)",
+          0.8,
+          "rgb(239,138,98)",
+          1,
+          "rgb(178,24,43)",
+        ],
+        // Adjust the heatmap radius by zoom level
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 50],
+        // Transition from heatmap to circle layer by zoom level
+        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 1, 16, 0],
+      },
+    });
+
+    // Add circle layer for high zoom levels
+    map.current.addLayer({
+      id: "household-risk-points",
+      type: "circle",
+      source: "household-heatmap",
+      minzoom: 14,
+      paint: {
+        // Size circle radius by risk score
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["get", "risk_score"],
+          1,
+          4,
+          50,
+          20,
+        ],
+        // Color circle by risk score
+        "circle-color": [
+          "interpolate",
+          ["linear"],
+          ["get", "risk_score"],
+          0,
+          "#2563eb",
+          10,
+          "#f59e0b",
+          25,
+          "#ef4444",
+          50,
+          "#991b1b",
+        ],
+        "circle-stroke-color": "white",
+        "circle-stroke-width": 1,
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 16, 1],
+      },
+    });
+
+    // Add click handler for risk points
+    map.current.on("click", "household-risk-points", (e) => {
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
+
+      // Create popup for risk area
+      new mapboxgl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(
+          `
+          <div style="padding: 15px; max-width: 300px;">
+            <h3 style="margin: 0 0 10px 0; color: #dc2626; font-size: 14px;">
+              ⚠️ High Risk Area
+            </h3>
+            <div style="margin-bottom: 8px;">
+              <strong>Households:</strong> ${properties.household_count}
+            </div>
+            <div style="margin-bottom: 8px;">
+              <strong>Risk Score:</strong> ${Math.round(properties.risk_score)}
+            </div>
+            <div style="margin-bottom: 8px;">
+              <strong>Nearby Contaminated Source:</strong><br>
+              ${properties.water_source}
+            </div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+              This area shows increased risk due to proximity to contaminated water sources and household density.
+            </div>
+          </div>
+        `
+        )
+        .addTo(map.current);
+    });
+
+    // Change cursor on hover
+    map.current.on("mouseenter", "household-risk-points", () => {
+      map.current.getCanvas().style.cursor = "pointer";
+    });
+
+    map.current.on("mouseleave", "household-risk-points", () => {
+      map.current.getCanvas().style.cursor = "";
+    });
+  };
+
+  const removeHeatmapLayer = () => {
+    if (!map.current) return;
+
+    // Remove layers and source
+    ["household-heatmap", "household-risk-points"].forEach((layerId) => {
+      if (map.current.getLayer(layerId)) {
+        map.current.removeLayer(layerId);
+      }
+    });
+
+    if (map.current.getSource("household-heatmap")) {
+      map.current.removeSource("household-heatmap");
+    }
+  };
+
+  // NEW: Toggle between views
+  const toggleViewMode = async () => {
+    if (viewMode === "markers") {
+      // Switch to heatmap
+      if (riskData.length === 0) {
+        await fetchHouseholdData();
+      }
+
+      // Hide markers
+      markersRef.current.forEach((marker) => {
+        marker.getElement().style.display = "none";
+      });
+
+      // Show heatmap
+      addHeatmapLayer();
+      setViewMode("heatmap");
+    } else {
+      // Switch to markers
+      removeHeatmapLayer();
+
+      // Show markers
+      markersRef.current.forEach((marker) => {
+        marker.getElement().style.display = "block";
+      });
+
+      setViewMode("markers");
+    }
+  };
+
+  // Load household data when component mounts
+  useEffect(() => {
+    fetchHouseholdData();
+  }, []);
 
   // NEW: Image viewer state
   const [imageViewer, setImageViewer] = useState({
@@ -322,23 +596,6 @@ const MapView = () => {
         const response = await waterLocationAPI.getAll();
         if (response.success && response.data) {
           setLocations(response.data);
-
-          // 🔍 DEBUG: Let's see what date/time data we're getting
-          // response.data.forEach((loc, index) => {
-          //   console.log(`Location ${index + 1} (${loc.full_name}):`, {
-          //     sample_date: loc.sample_date,
-          //     sample_time: loc.sample_time,
-          //     date_type: typeof loc.sample_date,
-          //     time_type: typeof loc.sample_time,
-          //     coordinates: [loc.longitude, loc.latitude],
-          //     raw_location: loc,
-          //   });
-          // });
-
-          // console.log(
-          //   "Locations with images:",
-          //   response.data.filter((loc) => loc.image_path)
-          // );
         }
       } catch (err) {
         console.error("❌ Error:", err);
@@ -886,49 +1143,45 @@ const MapView = () => {
         </div>
       </div>
 
-      {/* Legend Toggle Button */}
-      <button
-        onClick={() => setIsLegendOpen(!isLegendOpen)}
-        className="legend-toggle-btn"
-        title={isLegendOpen ? "Hide Legend" : "Show Legend"}
-      >
-        <span className="legend-toggle-icon">{isLegendOpen ? "✕" : "🗺️"}</span>
-        <span className="legend-toggle-text">
-          {isLegendOpen ? "Hide" : "Legend"}
-        </span>
-      </button>
+      <div className="view-toggle-container">
+        <button
+          className={`view-toggle-btn ${
+            viewMode === "markers" ? "active" : ""
+          }`}
+          onClick={toggleViewMode}
+          disabled={heatmapLoading}
+        >
+          {heatmapLoading ? (
+            <span>Loading...</span>
+          ) : viewMode === "markers" ? (
+            <>🗺️ Show Risk Heatmap</>
+          ) : (
+            <>📍 Show Water Sources</>
+          )}
+        </button>
 
-      {/* Collapsible Legend */}
-      <div
-        className={`modern-legend ${
-          isLegendOpen ? "legend-open" : "legend-closed"
-        }`}
-      >
-        <div className="legend-header">
-          <div className="legend-icon">🗺️</div>
-          <div>
-            <h3>Maasin Water Quality</h3>
+        {viewMode === "heatmap" && (
+          <div className="heatmap-legend">
+            <h4>Risk Level</h4>
+            <div className="legend-items">
+              <div className="legend-item">
+                <span className="legend-color low-risk"></span>
+                <span>Low Risk</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-color medium-risk"></span>
+                <span>Medium Risk</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-color high-risk"></span>
+                <span>High Risk</span>
+              </div>
+            </div>
+            <p className="legend-description">
+              Risk based on household density near contaminated water sources
+            </p>
           </div>
-        </div>
-
-        <div className="legend-items">
-          <div className="legend-item">
-            <div className="legend-color safe"></div>
-            <span>Safe to Drink</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color undrinkable"></div>
-            <span>Needs Treatment</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color hazard"></div>
-            <span>Hazardous</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color pending"></div>
-            <span>No Sample Yet</span>
-          </div>
-        </div>
+        )}
       </div>
 
       <div
@@ -1015,6 +1268,58 @@ const MapView = () => {
               draggable={false}
             />
           </div>
+
+          {mapStatus === "creating" && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: "rgba(255,255,255,0.95)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 20,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    border: "4px solid #e5e7eb",
+                    borderTop: "4px solid #3b82f6",
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                    margin: "0 auto 15px",
+                  }}
+                ></div>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#4b5563",
+                    fontSize: "16px",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Loading Maasin Water Quality Map...
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#9ca3af",
+                    fontSize: "12px",
+                  }}
+                >
+                  {heatmapLoading
+                    ? "Analyzing household risk data..."
+                    : "Focusing on Maasin City, Southern Leyte"}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Image Info */}
           <div className="image-viewer-info">
@@ -1106,6 +1411,127 @@ const MapView = () => {
             padding: 5px 24px;
             z-index: 20;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          }
+
+          .view-toggle-container {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+          }
+
+          .view-toggle-btn {
+            background: rgba(255, 255, 255, 0.95);
+            color: #374151;
+            border: 2px solid #e5e7eb;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            min-width: 180px;
+          }
+
+          .view-toggle-btn:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+          }
+
+          .view-toggle-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #2563eb;
+          }
+
+          .view-toggle-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+          }
+
+          /* Heatmap Legend Styles */
+          .heatmap-legend {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            max-width: 200px;
+          }
+
+          .heatmap-legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+          }
+
+          .legend-items {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 10px;
+          }
+
+          .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #4b5563;
+          }
+
+          .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+          }
+
+          .legend-color.low-risk {
+            background: #2563eb;
+          }
+
+          .legend-color.medium-risk {
+            background: #f59e0b;
+          }
+
+          .legend-color.high-risk {
+            background: #ef4444;
+          }
+
+          .legend-description {
+            font-size: 11px;
+            color: #6b7280;
+            margin: 8px 0 0 0;
+            line-height: 1.3;
+          }
+
+          @media (max-width: 768px) {
+            .view-toggle-container {
+              top: 70px;
+              right: 10px;
+            }
+
+            .view-toggle-btn {
+              min-width: 140px;
+              padding: 10px 15px;
+              font-size: 12px;
+            }
+
+            .heatmap-legend {
+              max-width: 160px;
+              padding: 12px;
+            }
           }
           
           .header-content {
