@@ -57,8 +57,17 @@ export const adminAPI = {
     }),
 };
 
+export const householdAPI = {
+  // Get all households
+  getAll: () => apiRequest("/households"),
+
+  // Get household risk analysis
+  getRiskAnalysis: () => apiRequest("/households/risk-analysis"),
+};
+
 export default {
   waterLocationAPI,
   healthAPI,
   adminAPI,
+  householdAPI,
 };
