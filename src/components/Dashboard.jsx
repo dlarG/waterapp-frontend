@@ -401,7 +401,6 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </button>
-
                   <button className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">
@@ -414,9 +413,11 @@ const Dashboard = () => {
                         </p>
                       </div>
                     </div>
-                  </button>
-
-                  <button className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
+                  </button>{" "}
+                  <button
+                    onClick={() => navigate("/admin/add-location")}
+                    className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100"
+                  >
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">
                         <FaPlus className="w-6 h-6 text-white" />
@@ -431,7 +432,6 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </button>
-
                   <button className="cursor-pointer group bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-xl p-5 text-left transition-all duration-300 transform hover:-translate-y-1 border border-blue-100">
                     <div className="flex items-center space-x-4">
                       <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg group-hover:scale-110 transition-transform duration-300">

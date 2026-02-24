@@ -128,11 +128,11 @@ const MapView = () => {
           ["get", "risk_score"],
           0,
           0,
-          50,
+          500,
           1,
         ],
         // Increase the heatmap color intensity based on zoom level
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 18, 3],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 10, 3],
         // Color ramp for heatmap - red indicates higher risk
         "heatmap-color": [
           "interpolate",
@@ -152,9 +152,7 @@ const MapView = () => {
           "rgb(178,24,43)",
         ],
         // Adjust the heatmap radius by zoom level
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 50],
-        // Transition from heatmap to circle layer by zoom level
-        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 1, 16, 0],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 40],
       },
     });
 

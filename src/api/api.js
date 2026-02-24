@@ -32,6 +32,13 @@ export const waterLocationAPI = {
   // Get specific water location
   getById: (id) => apiRequest(`/water-locations/${id}`),
 
+  // Create new water location
+  create: (locationData) =>
+    apiRequest("/water-locations", {
+      method: "POST",
+      body: JSON.stringify(locationData),
+    }),
+
   // Get map bounds for Maasin
   getMapBounds: () => apiRequest("/map-bounds"),
 };
@@ -65,9 +72,38 @@ export const householdAPI = {
   getRiskAnalysis: () => apiRequest("/households/risk-analysis"),
 };
 
+// Image upload API
+export const imageAPI = {
+  // Upload image for water location
+  upload: async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`${API_BASE_URL}/upload-image`, {
+        method: "POST",
+        body: formData,
+        // Don't set Content-Type header - let browser set it with boundary
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Image Upload Error:", error);
+      throw error;
+    }
+  },
+};
+
 export default {
   waterLocationAPI,
   healthAPI,
   adminAPI,
   householdAPI,
+  imageAPI,
 };

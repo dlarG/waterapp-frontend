@@ -7,6 +7,7 @@ import "./App.css";
 import AuthPage from "./auth/AuthPage";
 import Dashboard from "./components/Dashboard";
 import MapViewAdmin from "./MapViewAdmin";
+import AddLocation from "./components/AddLocation";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin/map" element={<MapViewAdmin />} />
+            <Route path="/admin/add-location" element={<AddLocation />} />
           </Routes>
         </div>
       </Router>
