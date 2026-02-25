@@ -193,7 +193,7 @@ const MapView = () => {
       },
     });
 
-    // Add click handler for risk points
+    // Add click handler forMAA risk points
     map.current.on("click", "household-risk-points", (e) => {
       const coordinates = e.features[0].geometry.coordinates.slice();
       const properties = e.features[0].properties;
