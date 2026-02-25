@@ -159,6 +159,10 @@ const AuthPage = () => {
     }
   };
 
+  const handleGoBack = () => {
+    navigate("/", { replace: true });
+  };
+
   // Register handlers
   const handleRegisterChange = (e) => {
     const { name, value } = e.target;
@@ -363,6 +367,9 @@ const AuthPage = () => {
                     exit="exit"
                     className="p-8 lg:p-12 flex flex-col justify-center min-h-[600px]"
                   >
+                    <button onClick={handleGoBack}>
+                      <FaArrowLeft className="cursor-pointer w-5 h-5 text-gray-600 hover:text-gray-800 transition-colors duration-300" />
+                    </button>
                     <div className="mb-8 mt-12">
                       <motion.h2
                         initial={{ y: 20, opacity: 0 }}
