@@ -15,6 +15,7 @@ const HomePage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
     };
@@ -123,7 +124,7 @@ const HomePage = () => {
                 animate={{ rotate: 0, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
                 src="/images/logo/cropped_circle_image.png"
-                alt="Safewater logo for maasin"
+                alt="MWAVE logo for maasin"
                 className="w-15 h-15 lg:w-18 lg:h-18 object-cover rounded-full"
               />
               <motion.div className="flex flex-col">
@@ -598,17 +599,15 @@ const HomePage = () => {
                 <motion.div
                   whileHover={{ rotate: 360 }}
                   transition={{ duration: 0.5 }}
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold text-sm overflow-hidden"
+                  className="w-13 h-13 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold text-sm overflow-hidden"
                 >
                   <img
-                    src="/images/logo/logo-circled.png"
+                    src="/images/logo/logo-circled1.png"
                     alt="Safe water logo for maasin"
                     className="w-full h-full object-cover"
                   />
                 </motion.div>
-                <span className="text-xl font-medium text-white">
-                  SafeWater
-                </span>
+                <span className="text-xl font-medium text-white">MWAVE</span>
               </div>
               <p className="text-sm text-slate-500 max-w-md">
                 Real-time water quality monitoring system for Maasin, Southern
@@ -670,7 +669,7 @@ const HomePage = () => {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="pt-8 border-t border-slate-100 text-center text-sm text-slate-400"
           >
-            <p>© 2024 SafeWater. All rights reserved.</p>
+            <p>© 2026 MWAVE. All rights reserved.</p>
           </motion.div>
         </div>
       </motion.footer>
