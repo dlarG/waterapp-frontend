@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import { waterLocationAPI, imageAPI } from "../api/api";
 import { useAuth } from "../context/AuthContext";
@@ -36,12 +36,23 @@ const AddLocation = () => {
     description: "",
     latitude: MAASIN_CONFIG.center[0].toString(),
     longitude: MAASIN_CONFIG.center[1].toString(),
+    barangay_name: "",
     coliform_bacteria: null,
     e_coli: null,
     sample_date: "",
     sample_time: "",
-    barangay_name: "",
     image_path: "",
+  });
+
+  // New state for enhanced barangay handling
+  const [createNewBarangay, setCreateNewBarangay] = useState(false);
+  const [newBarangayName, setNewBarangayName] = useState("");
+  const [barangayOptions, setBarangayOptions] = useState([]);
+  const [loadingBarangays, setLoadingBarangays] = useState(true);
+  const [bacteriaTestResults, setBacteriaTestResults] = useState({
+    coliform_present: "", // 'present', 'absent', or ''
+    ecoli_present: "", // 'present', 'absent', or ''
+    both_safe: false, // Safe water checkbox
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -49,26 +60,91 @@ const AddLocation = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
-
-  // Barangay options for dropdown
-  const barangayOptions = [
-    "batuan",
-    "combado",
-    "hantag",
-    "malapoc-norte",
-    "malapoc-sur",
-    "matin_ao",
-    "rizal",
-    "san_isidro",
-    // Add more barangays as needed
-  ];
-
   // Check if coordinates are within Maasin bounds
   const isWithinBounds = useCallback((lat, lng) => {
     const [swLat, swLng] = MAASIN_CONFIG.bounds[0];
     const [neLat, neLng] = MAASIN_CONFIG.bounds[1];
     return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
   }, []);
+
+  // Load existing barangays from database
+  useEffect(() => {
+    const fetchBarangays = async () => {
+      try {
+        setLoadingBarangays(true);
+        const response = await fetch("/api/barangays/from-locations");
+        const result = await response.json();
+
+        if (result.success) {
+          setBarangayOptions(result.data || []);
+        } else {
+          console.error("Failed to fetch barangays:", result.error);
+          // Fallback to default options
+          setBarangayOptions([
+            "batuan",
+            "combado",
+            "hantag",
+            "malapoc-norte",
+            "malapoc-sur",
+            "matin_ao",
+            "rizal",
+            "san_isidro",
+          ]);
+        }
+      } catch (error) {
+        console.error("Error fetching barangays:", error);
+        // Fallback to default options
+        setBarangayOptions([
+          "batuan",
+          "combado",
+          "hantag",
+          "malapoc-norte",
+          "malapoc-sur",
+          "matin_ao",
+          "rizal",
+          "san_isidro",
+        ]);
+      } finally {
+        setLoadingBarangays(false);
+      }
+    };
+
+    fetchBarangays();
+  }, []);
+  // Simple bacteria test result handling
+  const handleBacteriaResultChange = (bacteriaType, result) => {
+    setBacteriaTestResults((prev) => ({
+      ...prev,
+      [bacteriaType]: result,
+      // If setting both safe, clear individual results
+      ...(bacteriaType === "both_safe" && result
+        ? { coliform_present: "", ecoli_present: "" }
+        : {}),
+      // If setting individual results, clear both safe
+      ...(bacteriaType !== "both_safe" && result ? { both_safe: false } : {}),
+    }));
+
+    // Also update formData for backend compatibility
+    if (bacteriaType === "both_safe" && result) {
+      setFormData((prev) => ({
+        ...prev,
+        coliform_bacteria: false,
+        e_coli: false,
+      }));
+    } else if (bacteriaType === "coliform_present") {
+      setFormData((prev) => ({
+        ...prev,
+        coliform_bacteria:
+          result === "present" ? true : result === "absent" ? false : null,
+      }));
+    } else if (bacteriaType === "ecoli_present") {
+      setFormData((prev) => ({
+        ...prev,
+        e_coli:
+          result === "present" ? true : result === "absent" ? false : null,
+      }));
+    }
+  };
 
   // Component for handling map clicks
   const MapClickHandler = () => {
@@ -134,15 +210,29 @@ const AddLocation = () => {
     const { name, value, type, checked } = e.target;
 
     if (type === "checkbox") {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: checked ? true : null,
-      }));
+      // Handle special checkbox logic for bacteria testing
+      if (name === "create_new_barangay") {
+        setCreateNewBarangay(checked);
+        if (checked) {
+          setFormData((prev) => ({ ...prev, barangay_name: "" }));
+        } else {
+          setNewBarangayName("");
+        }
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: checked ? true : null,
+        }));
+      }
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      if (name === "new_barangay_name") {
+        setNewBarangayName(value);
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+        }));
+      }
     }
 
     // Clear errors when user starts typing
@@ -195,8 +285,14 @@ const AddLocation = () => {
     setIsSubmitting(true);
 
     try {
+      // Determine final barangay value
+      const finalBarangay = createNewBarangay
+        ? newBarangayName.trim()
+        : formData.barangay_name;
+
       const submitData = {
         full_name: formData.full_name.trim(),
+        barangay: finalBarangay || null,
         latitude: parseFloat(formData.latitude),
         longitude: parseFloat(formData.longitude),
         coliform_bacteria: formData.coliform_bacteria,
@@ -349,27 +445,67 @@ const AddLocation = () => {
                   </p>
                 )}
               </div>{" "}
-              {/* Barangay Selection */}
+              {/* Enhanced Barangay Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Barangay (Optional)
                 </label>
-                <select
-                  name="barangay_name"
-                  value={formData.barangay_name}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.barangay_name ? "border-red-500" : "border-gray-300"
-                  }`}
-                >
-                  <option value="">Select Barangay</option>
-                  {barangayOptions.map((barangay) => (
-                    <option key={barangay} value={barangay}>
-                      {barangay.charAt(0).toUpperCase() +
-                        barangay.slice(1).replace("-", " ")}
+
+                {/* Checkbox to create new barangay */}
+                <div className="mb-3">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      name="create_new_barangay"
+                      checked={createNewBarangay}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Create new barangay
+                    </span>
+                  </label>
+                </div>
+
+                {/* Barangay Dropdown (disabled when creating new) */}
+                {!createNewBarangay && (
+                  <select
+                    name="barangay_name"
+                    value={formData.barangay_name}
+                    onChange={handleInputChange}
+                    disabled={loadingBarangays}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.barangay_name
+                        ? "border-red-500"
+                        : "border-gray-300"
+                    } ${loadingBarangays ? "bg-gray-100" : ""}`}
+                  >
+                    <option value="">
+                      {loadingBarangays
+                        ? "Loading barangays..."
+                        : "Select Barangay"}
                     </option>
-                  ))}
-                </select>
+                    {barangayOptions.map((barangay) => (
+                      <option key={barangay} value={barangay}>
+                        {barangay.charAt(0).toUpperCase() +
+                          barangay.slice(1).replace(/[-_]/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* New Barangay Input (shown when creating new) */}
+                {createNewBarangay && (
+                  <input
+                    type="text"
+                    name="new_barangay_name"
+                    value={newBarangayName}
+                    onChange={handleInputChange}
+                    placeholder="Enter new barangay name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
+
                 {errors.barangay_name && (
                   <p className="text-red-500 text-sm mt-1">
                     {errors.barangay_name}
@@ -424,41 +560,126 @@ const AddLocation = () => {
                     </p>
                   )}
                 </div>
-              </div>
-              {/* Water Quality Tests */}
+              </div>{" "}
+              {/* Simplified Water Quality Tests */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Water Quality Tests (Optional)
                 </label>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      name="coliform_bacteria"
-                      checked={formData.coliform_bacteria === true}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label className="text-sm text-gray-700">
-                      Coliform Bacteria Present
-                    </label>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      name="e_coli"
-                      checked={formData.e_coli === true}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label className="text-sm text-gray-700">
-                      E. Coli Present
-                    </label>
-                  </div>
+
+                <div className="space-y-4">
+                  {/* Individual Bacteria Tests (when not safe water) */}
+                  {!bacteriaTestResults.both_safe && (
+                    <>
+                      {/* Coliform Bacteria */}
+                      <div className="border border-gray-200 rounded-lg p-3">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">
+                          Coliform Bacteria Test
+                        </h4>
+                        <div className="space-y-2">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              name="coliform_result"
+                              checked={
+                                bacteriaTestResults.coliform_present ===
+                                "present"
+                              }
+                              onChange={() =>
+                                handleBacteriaResultChange(
+                                  "coliform_present",
+                                  "present"
+                                )
+                              }
+                              className="w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
+                            />
+                            <span className="text-sm text-red-600 font-medium">
+                              Present (Positive) - Unsafe
+                            </span>
+                          </label>
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              name="coliform_result"
+                              checked={
+                                bacteriaTestResults.coliform_present ===
+                                "absent"
+                              }
+                              onChange={() =>
+                                handleBacteriaResultChange(
+                                  "coliform_present",
+                                  "absent"
+                                )
+                              }
+                              className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
+                            />
+                            <span className="text-sm text-green-600 font-medium">
+                              Absent (Negative) - Safe
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* E. Coli */}
+                      <div className="border border-gray-200 rounded-lg p-3">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">
+                          E. Coli Test
+                        </h4>
+                        <div className="space-y-2">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              name="ecoli_result"
+                              checked={
+                                bacteriaTestResults.ecoli_present === "present"
+                              }
+                              onChange={() =>
+                                handleBacteriaResultChange(
+                                  "ecoli_present",
+                                  "present"
+                                )
+                              }
+                              className="w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
+                            />
+                            <span className="text-sm text-red-600 font-medium">
+                              Present (Positive) - Unsafe
+                            </span>
+                          </label>
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              name="ecoli_result"
+                              checked={
+                                bacteriaTestResults.ecoli_present === "absent"
+                              }
+                              onChange={() =>
+                                handleBacteriaResultChange(
+                                  "ecoli_present",
+                                  "absent"
+                                )
+                              }
+                              className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
+                            />
+                            <span className="text-sm text-green-600 font-medium">
+                              Absent (Negative) - Safe
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Leave unchecked if tests haven't been performed yet
-                </p>
+
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-700">
+                    <strong>Testing Guide:</strong>
+                    <br />
+                    • Check "Safe Water" if both bacteria tests are negative
+                    <br />
+                    • Use individual tests to record specific bacteria results
+                    <br />• Leave all unchecked if no testing has been done yet
+                  </p>
+                </div>
               </div>
               {/* Sample Date and Time */}
               <div className="grid grid-cols-2 gap-4">

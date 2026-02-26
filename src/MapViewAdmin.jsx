@@ -4,7 +4,7 @@ import mapboxgl from "mapbox-gl";
 import { waterLocationAPI, householdAPI } from "./api/api";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-const MapView = () => {
+const MapViewAdmin = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef([]);
@@ -17,6 +17,273 @@ const MapView = () => {
   const [householdData, setHouseholdData] = useState([]);
   const [riskData, setRiskData] = useState([]);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
+
+  const fetchHouseholdData = async () => {
+    try {
+      setHeatmapLoading(true);
+      console.log("🔍 Starting household data fetch...");
+
+      const [householdsResponse, riskResponse] = await Promise.all([
+        householdAPI.getAll(),
+        householdAPI.getRiskAnalysis(),
+      ]);
+
+      console.log("🏠 Households response:", householdsResponse);
+      console.log("🎯 Risk response:", riskResponse);
+
+      if (householdsResponse.success) {
+        setHouseholdData(householdsResponse.data);
+        console.log(
+          `✅ Loaded ${householdsResponse.data.length} household clusters`
+        );
+      } else {
+        console.error(
+          "❌ Households request failed:",
+          householdsResponse.error
+        );
+      }
+
+      if (riskResponse.success) {
+        setRiskData(riskResponse.data);
+        console.log(`✅ Loaded ${riskResponse.data.length} risk zones`);
+      } else {
+        console.error("❌ Risk analysis request failed:", riskResponse.error);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching household data:", error);
+      alert(`Error loading heatmap data: ${error.message}`);
+    } finally {
+      setHeatmapLoading(false);
+    }
+  };
+
+  // NEW: Add heatmap layer
+  const addHeatmapLayer = () => {
+    console.log("🗺️ Adding heatmap layer...");
+    console.log("Map available:", !!map.current);
+    console.log("Risk data length:", riskData.length);
+
+    if (!map.current) {
+      console.error("❌ Map not available");
+      return;
+    }
+
+    if (!riskData.length) {
+      console.error("❌ No risk data available");
+      alert(
+        "No risk data available for heatmap. Please ensure you have contaminated water sources and household data."
+      );
+      return;
+    }
+
+    // Remove existing heatmap layer if it exists
+    if (map.current.getLayer("household-heatmap")) {
+      console.log("🗑️ Removing existing heatmap layer");
+      map.current.removeLayer("household-heatmap");
+    }
+    if (map.current.getSource("household-heatmap")) {
+      map.current.removeSource("household-heatmap");
+    }
+    if (map.current.getLayer("household-risk-points")) {
+      map.current.removeLayer("household-risk-points");
+    }
+
+    console.log("📊 Creating heatmap with", riskData.length, "risk points");
+
+    // Prepare GeoJSON data for heatmap
+    const heatmapData = {
+      type: "FeatureCollection",
+      features: riskData.map((point) => ({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [point.longitude, point.latitude],
+        },
+        properties: {
+          risk_score: point.risk_score,
+          household_count: point.household_count,
+          water_source: point.water_source,
+          contamination: point.contamination_type,
+        },
+      })),
+    };
+
+    // Add heatmap source
+    map.current.addSource("household-heatmap", {
+      type: "geojson",
+      data: heatmapData,
+    });
+
+    // Add heatmap layer
+    map.current.addLayer({
+      id: "household-heatmap",
+      type: "heatmap",
+      source: "household-heatmap",
+      maxzoom: 18,
+      paint: {
+        // Increase the heatmap weight based on risk score
+        "heatmap-weight": [
+          "interpolate",
+          ["linear"],
+          ["get", "risk_score"],
+          0,
+          0,
+          500,
+          1,
+        ],
+        // Increase the heatmap color intensity based on zoom level
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 10, 3],
+        // Color ramp for heatmap - red indicates higher risk
+        "heatmap-color": [
+          "interpolate",
+          ["linear"],
+          ["heatmap-density"],
+          0,
+          "rgba(33,102,172,0)",
+          0.2,
+          "rgb(103,169,207)",
+          0.4,
+          "rgb(209,229,240)",
+          0.6,
+          "rgb(253,219,199)",
+          0.8,
+          "rgb(239,138,98)",
+          1,
+          "rgb(178,24,43)",
+        ],
+        // Adjust the heatmap radius by zoom level
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 40],
+      },
+    });
+
+    // Add circle layer for high zoom levels
+    map.current.addLayer({
+      id: "household-risk-points",
+      type: "circle",
+      source: "household-heatmap",
+      minzoom: 14,
+      paint: {
+        // Size circle radius by risk score
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["get", "risk_score"],
+          1,
+          4,
+          50,
+          20,
+        ],
+        // Color circle by risk score
+        "circle-color": [
+          "interpolate",
+          ["linear"],
+          ["get", "risk_score"],
+          0,
+          "#2563eb",
+          10,
+          "#f59e0b",
+          25,
+          "#ef4444",
+          50,
+          "#991b1b",
+        ],
+        "circle-stroke-color": "white",
+        "circle-stroke-width": 1,
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 16, 1],
+      },
+    });
+
+    // Add click handler forMAA risk points
+    map.current.on("click", "household-risk-points", (e) => {
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
+
+      // Create popup for risk area
+      new mapboxgl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(
+          `
+          <div style="padding: 15px; max-width: 300px;">
+            <h3 style="margin: 0 0 10px 0; color: #dc2626; font-size: 14px;">
+              ⚠️ High Risk Area
+            </h3>
+            <div style="margin-bottom: 8px;">
+              <strong>Households:</strong> ${properties.household_count}
+            </div>
+            <div style="margin-bottom: 8px;">
+              <strong>Risk Score:</strong> ${Math.round(properties.risk_score)}
+            </div>
+            <div style="margin-bottom: 8px;">
+              <strong>Nearby Contaminated Source:</strong><br>
+              ${properties.water_source}
+            </div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+              This area shows increased risk due to proximity to contaminated water sources and household density.
+            </div>
+          </div>
+        `
+        )
+        .addTo(map.current);
+    });
+
+    // Change cursor on hover
+    map.current.on("mouseenter", "household-risk-points", () => {
+      map.current.getCanvas().style.cursor = "pointer";
+    });
+
+    map.current.on("mouseleave", "household-risk-points", () => {
+      map.current.getCanvas().style.cursor = "";
+    });
+  };
+
+  const removeHeatmapLayer = () => {
+    if (!map.current) return;
+
+    // Remove layers and source
+    ["household-heatmap", "household-risk-points"].forEach((layerId) => {
+      if (map.current.getLayer(layerId)) {
+        map.current.removeLayer(layerId);
+      }
+    });
+
+    if (map.current.getSource("household-heatmap")) {
+      map.current.removeSource("household-heatmap");
+    }
+  };
+
+  // NEW: Toggle between views
+  const toggleViewMode = async () => {
+    if (viewMode === "markers") {
+      // Switch to heatmap
+      if (riskData.length === 0) {
+        await fetchHouseholdData();
+      }
+
+      // Hide markers
+      markersRef.current.forEach((marker) => {
+        marker.getElement().style.display = "none";
+      });
+
+      // Show heatmap
+      addHeatmapLayer();
+      setViewMode("heatmap");
+    } else {
+      // Switch to markers
+      removeHeatmapLayer();
+
+      // Show markers
+      markersRef.current.forEach((marker) => {
+        marker.getElement().style.display = "block";
+      });
+
+      setViewMode("markers");
+    }
+  };
+
+  // Load household data when component mounts
+  useEffect(() => {
+    fetchHouseholdData();
+  }, []);
 
   // NEW: Image viewer state
   const [imageViewer, setImageViewer] = useState({
@@ -32,7 +299,7 @@ const MapView = () => {
   const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_KEY;
 
   const MAASIN_CONFIG = {
-    center: [124.748792, 10.108537], // Maasin, Southern Leyte - City Center
+    center: [124.748792, 10.108537],
     zoom: 14.5,
     bounds: [
       [124.748792, 10.108537], // Southwest corner
@@ -144,279 +411,12 @@ const MapView = () => {
     if (bacteriaValue === null) return "Not tested";
     return bacteriaValue ? "Present" : "Absent";
   };
+
   // Get bacteria status color
   const getBacteriaColor = (bacteriaValue) => {
     if (bacteriaValue === null) return "#9ca3af";
     return bacteriaValue ? "#ef4444" : "#10b981";
   };
-
-  const fetchHouseholdData = async () => {
-    try {
-      setHeatmapLoading(true);
-      console.log("🔍 Starting household data fetch...");
-
-      const [householdsResponse, riskResponse] = await Promise.all([
-        householdAPI.getAll(),
-        householdAPI.getRiskAnalysis(),
-      ]);
-
-      console.log("🏠 Households response:", householdsResponse);
-      console.log("🎯 Risk response:", riskResponse);
-
-      if (householdsResponse.success) {
-        setHouseholdData(householdsResponse.data);
-        console.log(
-          `✅ Loaded ${householdsResponse.data.length} household clusters`
-        );
-      } else {
-        console.error(
-          "❌ Households request failed:",
-          householdsResponse.error
-        );
-      }
-
-      if (riskResponse.success) {
-        setRiskData(riskResponse.data);
-        console.log(`✅ Loaded ${riskResponse.data.length} risk zones`);
-      } else {
-        console.error("❌ Risk analysis request failed:", riskResponse.error);
-      }
-    } catch (error) {
-      console.error("❌ Error fetching household data:", error);
-      alert(`Error loading heatmap data: ${error.message}`);
-    } finally {
-      setHeatmapLoading(false);
-    }
-  };
-
-  // NEW: Add heatmap layer
-  const addHeatmapLayer = () => {
-    console.log("🗺️ Adding heatmap layer...");
-    console.log("Map available:", !!map.current);
-    console.log("Risk data length:", riskData.length);
-
-    if (!map.current) {
-      console.error("❌ Map not available");
-      return;
-    }
-
-    if (!riskData.length) {
-      console.error("❌ No risk data available");
-      alert(
-        "No risk data available for heatmap. Please ensure you have contaminated water sources and household data."
-      );
-      return;
-    }
-
-    // Remove existing heatmap layer if it exists
-    if (map.current.getLayer("household-heatmap")) {
-      console.log("🗑️ Removing existing heatmap layer");
-      map.current.removeLayer("household-heatmap");
-    }
-    if (map.current.getSource("household-heatmap")) {
-      map.current.removeSource("household-heatmap");
-    }
-    if (map.current.getLayer("household-risk-points")) {
-      map.current.removeLayer("household-risk-points");
-    }
-
-    console.log("📊 Creating heatmap with", riskData.length, "risk points");
-
-    // Prepare GeoJSON data for heatmap
-    const heatmapData = {
-      type: "FeatureCollection",
-      features: riskData.map((point) => ({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [point.longitude, point.latitude],
-        },
-        properties: {
-          risk_score: point.risk_score,
-          household_count: point.household_count,
-          water_source: point.water_source,
-          contamination: point.contamination_type,
-        },
-      })),
-    };
-
-    // Add heatmap source
-    map.current.addSource("household-heatmap", {
-      type: "geojson",
-      data: heatmapData,
-    }); // Add heatmap layer
-    map.current.addLayer({
-      id: "household-heatmap",
-      type: "heatmap",
-      source: "household-heatmap",
-      maxzoom: 18,
-      paint: {
-        // Increase the heatmap weight based on risk score
-        "heatmap-weight": [
-          "interpolate",
-          ["linear"],
-          ["get", "risk_score"],
-          0,
-          0,
-          100,
-          1,
-        ],
-        // Fixed heatmap intensity - no zoom dependency for consistent visibility
-        "heatmap-intensity": 2.5,
-        // Enhanced color ramp for stronger, more visible colors
-        "heatmap-color": [
-          "interpolate",
-          ["linear"],
-          ["heatmap-density"],
-          0,
-          "rgba(0,0,0,0)", // Transparent at zero density
-          0.1,
-          "rgba(65,105,225,0.8)", // Royal Blue with strong opacity
-          0.3,
-          "rgba(30,144,255,0.9)", // Dodger Blue
-          0.5,
-          "rgba(255,165,0,0.9)", // Orange
-          0.7,
-          "rgba(255,69,0,0.95)", // Red Orange
-          0.85,
-          "rgba(220,20,60,1)", // Crimson
-          1,
-          "rgba(139,0,0,1)", // Dark Red - maximum intensity
-        ],
-        // Fixed radius - no zoom dependency
-        "heatmap-radius": 35,
-        // Fixed opacity - no zoom-based transitions
-        "heatmap-opacity": 0.8,
-      },
-    }); // Add circle layer for high zoom levels
-    map.current.addLayer({
-      id: "household-risk-points",
-      type: "circle",
-      source: "household-heatmap",
-      minzoom: 14,
-      paint: {
-        // Size circle radius by risk score
-        "circle-radius": [
-          "interpolate",
-          ["linear"],
-          ["get", "risk_score"],
-          1,
-          6,
-          50,
-          25,
-        ],
-        // Enhanced color scheme for better visibility
-        "circle-color": [
-          "interpolate",
-          ["linear"],
-          ["get", "risk_score"],
-          0,
-          "#1e40af", // Strong blue for low risk
-          10,
-          "#f59e0b", // Orange for medium risk
-          25,
-          "#dc2626", // Strong red for high risk
-          50,
-          "#7f1d1d", // Dark red for very high risk
-        ],
-        "circle-stroke-color": "white",
-        "circle-stroke-width": 2,
-        "circle-opacity": 0.9,
-        "circle-stroke-opacity": 1,
-      },
-    });
-
-    // Add click handler for risk points
-    map.current.on("click", "household-risk-points", (e) => {
-      const coordinates = e.features[0].geometry.coordinates.slice();
-      const properties = e.features[0].properties;
-
-      // Create popup for risk area
-      new mapboxgl.Popup()
-        .setLngLat(coordinates)
-        .setHTML(
-          `
-          <div style="padding: 15px; max-width: 300px;">
-            <h3 style="margin: 0 0 10px 0; color: #dc2626; font-size: 14px;">
-              ⚠️ High Risk Area
-            </h3>
-            <div style="margin-bottom: 8px;">
-              <strong>Households:</strong> ${properties.household_count}
-            </div>
-            <div style="margin-bottom: 8px;">
-              <strong>Risk Score:</strong> ${Math.round(properties.risk_score)}
-            </div>
-            <div style="margin-bottom: 8px;">
-              <strong>Nearby Contaminated Source:</strong><br>
-              ${properties.water_source}
-            </div>
-            <div style="font-size: 11px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-              This area shows increased risk due to proximity to contaminated water sources and household density.
-            </div>
-          </div>
-        `
-        )
-        .addTo(map.current);
-    });
-
-    // Change cursor on hover
-    map.current.on("mouseenter", "household-risk-points", () => {
-      map.current.getCanvas().style.cursor = "pointer";
-    });
-
-    map.current.on("mouseleave", "household-risk-points", () => {
-      map.current.getCanvas().style.cursor = "";
-    });
-  };
-
-  const removeHeatmapLayer = () => {
-    if (!map.current) return;
-
-    // Remove layers and source
-    ["household-heatmap", "household-risk-points"].forEach((layerId) => {
-      if (map.current.getLayer(layerId)) {
-        map.current.removeLayer(layerId);
-      }
-    });
-
-    if (map.current.getSource("household-heatmap")) {
-      map.current.removeSource("household-heatmap");
-    }
-  };
-
-  // NEW: Toggle between views
-  const toggleViewMode = async () => {
-    if (viewMode === "markers") {
-      // Switch to heatmap
-      if (riskData.length === 0) {
-        await fetchHouseholdData();
-      }
-
-      // Hide markers
-      markersRef.current.forEach((marker) => {
-        marker.getElement().style.display = "none";
-      });
-
-      // Show heatmap
-      addHeatmapLayer();
-      setViewMode("heatmap");
-    } else {
-      // Switch to markers
-      removeHeatmapLayer();
-
-      // Show markers
-      markersRef.current.forEach((marker) => {
-        marker.getElement().style.display = "block";
-      });
-
-      setViewMode("markers");
-    }
-  };
-
-  // Load household data when component mounts
-  useEffect(() => {
-    fetchHouseholdData();
-  }, []);
 
   // NEW: Open image viewer
   const openImageViewer = (imagePath, locationName) => {
@@ -532,7 +532,7 @@ const MapView = () => {
 
     return `
       <div style="margin-bottom: 15px;">
-        <div class="image-container" onclick="window.openImageViewer('${imagePath}', '${locationName}')" style="
+        <div class="image-container" onclick="window.openImageViewer('/${imagePath}', '${locationName}')" style="
           position: relative;
           cursor: pointer;
           border-radius: 6px;
@@ -594,23 +594,6 @@ const MapView = () => {
         const response = await waterLocationAPI.getAll();
         if (response.success && response.data) {
           setLocations(response.data);
-
-          // 🔍 DEBUG: Let's see what date/time data we're getting
-          // response.data.forEach((loc, index) => {
-          //   console.log(`Location ${index + 1} (${loc.full_name}):`, {
-          //     sample_date: loc.sample_date,
-          //     sample_time: loc.sample_time,
-          //     date_type: typeof loc.sample_date,
-          //     time_type: typeof loc.sample_time,
-          //     coordinates: [loc.longitude, loc.latitude],
-          //     raw_location: loc,
-          //   });
-          // });
-
-          // console.log(
-          //   "Locations with images:",
-          //   response.data.filter((loc) => loc.image_path)
-          // );
         }
       } catch (err) {
         console.error("❌ Error:", err);
@@ -632,7 +615,7 @@ const MapView = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/satellite-streets-v12", // Use satellite streets for better visibility
+        style: "mapbox://styles/mapbox/outdoors-v12", // Use satellite streets for better visibility
         center: MAASIN_CONFIG.center,
         zoom: MAASIN_CONFIG.zoom,
         maxBounds: MAASIN_CONFIG.bounds, // 🔒 Lock map to Maasin area
@@ -915,8 +898,8 @@ const MapView = () => {
           const el = document.createElement("div");
           el.className = "custom-marker";
           el.style.cssText = `
-            width: 28px; 
-            height: 28px; 
+            width: 16px; 
+            height: 16px; 
             border-radius: 50%;
             background-color: ${getStatusColor(
               location.water_status,
@@ -1135,7 +1118,7 @@ const MapView = () => {
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <div className="modern-header">
+      {/* <div className="modern-header">
         <div className="header-content">
           <div className="header-left">
             <button
@@ -1154,9 +1137,9 @@ const MapView = () => {
               <span className="stats-value">{locations.length}</span>
               <span className="stats-label">Total Locations</span>
             </div>
-          </div>{" "}
+          </div>
         </div>
-      </div>
+      </div> */}
 
       <div className="view-toggle-container">
         <button
@@ -1169,9 +1152,9 @@ const MapView = () => {
           {heatmapLoading ? (
             <span>Loading...</span>
           ) : viewMode === "markers" ? (
-            <>🗺️ Show Risk Heatmap</>
+            <>Show Risk Heatmap</>
           ) : (
-            <>📍 Show Water Sources</>
+            <>Show Water Sources</>
           )}
         </button>
 
@@ -1265,7 +1248,7 @@ const MapView = () => {
           {/* Image Container */}
           <div className="image-viewer-container">
             <img
-              src={`/${imageViewer.imageSrc}`}
+              src={imageViewer.imageSrc}
               alt={imageViewer.locationName}
               className="viewer-image"
               style={{
@@ -1284,9 +1267,61 @@ const MapView = () => {
             />
           </div>
 
+          {mapStatus === "creating" && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: "rgba(255,255,255,0.95)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 20,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    border: "4px solid #e5e7eb",
+                    borderTop: "4px solid #3b82f6",
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                    margin: "0 auto 15px",
+                  }}
+                ></div>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#4b5563",
+                    fontSize: "16px",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Loading Maasin Water Quality Map...
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#9ca3af",
+                    fontSize: "12px",
+                  }}
+                >
+                  {heatmapLoading
+                    ? "Analyzing household risk data..."
+                    : "Focusing on Maasin City, Southern Leyte"}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Image Info */}
           <div className="image-viewer-info">
-            <h3>{imageViewer.locationName}</h3>
+            <h3>📷 {imageViewer.locationName}</h3>
             <p>
               Water Source in Maasin City • Use +/- keys or buttons to zoom •
               Drag to pan when zoomed
@@ -1295,6 +1330,7 @@ const MapView = () => {
         </div>
       )}
 
+      {/* Loading Overlay */}
       {mapStatus === "creating" && (
         <div
           style={{
@@ -1344,427 +1380,8 @@ const MapView = () => {
           </div>
         </div>
       )}
-
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          
-          .mapboxgl-popup-close-button {
-            font-size: 20px;
-            color: white;
-            right: 5px;
-            top: 5px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-          }
-
-          .modern-header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
-            color: white;
-            padding: 5px 24px;
-            z-index: 20;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-          }
-          
-          .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-          }
-          
-          .back-button {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-          }
-          
-          .back-button:hover {
-            background: rgba(255, 255, 255, 0.25);
-            transform: translateX(-2px);
-          }
-          
-          .header-title h1 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-          }
-          
-          .header-title p {
-            margin: 4px 0 0;
-            font-size: 13px;
-            opacity: 0.9;
-          }
-          
-          .header-stats {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-          }
-          
-          .stats-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 5px 10px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-            min-width: 80px;
-          }
-          
-          .stats-value {
-            font-size: 20px;
-            font-weight: 700;
-          }
-            .stats-label {
-            font-size: 12px;
-            opacity: 0.9;
-            margin-top: 4px;
-          }
-
-          .view-toggle-container {
-            position: absolute;
-            top: 80px;
-            right: 20px;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-          }
-
-          .view-toggle-btn {
-            background: rgba(255, 255, 255, 0.95);
-            color: #374151;
-            border: 2px solid #e5e7eb;
-            padding: 12px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            min-width: 180px;
-          }
-
-          .view-toggle-btn:hover {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: #3b82f6;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-          }
-
-          .view-toggle-btn.active {
-            background: #3b82f6;
-            color: white;
-            border-color: #2563eb;
-          }
-
-          .view-toggle-btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none;
-          }
-
-          /* Heatmap Legend Styles */
-          .heatmap-legend {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e5e7eb;
-            max-width: 200px;
-          }
-
-          .heatmap-legend h4 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #374151;
-          }
-
-          .legend-items {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 10px;
-          }
-
-          .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: #4b5563;
-          }
-
-          .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-          }
-
-          .legend-color.low-risk {
-            background: #2563eb;
-          }
-
-          .legend-color.medium-risk {
-            background: #f59e0b;
-          }
-
-          .legend-color.high-risk {
-            background: #ef4444;
-          }
-
-          .legend-description {
-            font-size: 11px;
-            color: #6b7280;
-            margin: 8px 0 0 0;
-            line-height: 1.3;
-          }
-
-          @media (max-width: 768px) {
-            .view-toggle-container {
-              top: 70px;
-              right: 10px;
-            }
-
-            .view-toggle-btn {
-              min-width: 140px;
-              padding: 10px 15px;
-              font-size: 12px;
-            }
-
-            .heatmap-legend {
-              max-width: 160px;
-              padding: 12px;
-            }
-          }
-
-          
-
-          /* NEW: Image Viewer Styles */
-          .image-viewer-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-          }
-
-          .image-viewer-controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            gap: 15px;
-            z-index: 1001;
-          }
-
-          .control-group {
-            display: flex;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 8px;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-          }
-
-          .control-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 10px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            min-width: 40px;
-          }
-
-          .control-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-          }
-
-          .close-btn {
-            background: rgba(239, 68, 68, 0.8) !important;
-          }
-
-          .close-btn:hover {
-            background: rgba(239, 68, 68, 1) !important;
-          }
-
-          .zoom-display {
-            color: white;
-            font-size: 12px;
-            padding: 10px 8px;
-            font-weight: 600;
-            min-width: 50px;
-            text-align: center;
-          }
-
-          .image-viewer-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            position: relative;
-          }
-
-          .viewer-image {
-            max-width: 90vw;
-            max-height: 80vh;
-            object-fit: contain;
-            transition: transform 0.3s ease;
-            user-select: none;
-          }
-
-          .image-viewer-info {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            max-width: 80vw;
-          }
-
-          .image-viewer-info h3 {
-            margin: 0 0 5px 0;
-            font-size: 16px;
-            font-weight: 600;
-          }
-
-          .image-viewer-info p {
-            margin: 0;
-            font-size: 12px;
-            opacity: 0.8;
-            line-height: 1.4;
-          }
-          
-          .mapboxgl-popup-content {
-            padding: 10px;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            max-height: 80vh;
-            overflow-y: auto;
-          }
-          
-          .mapboxgl-marker {
-            position: absolute;
-            will-change: transform;
-          }
-          
-          .custom-marker {
-            position: absolute;
-            top: 0;
-            left: 0;
-          }
-          
-          .mapboxgl-marker-container {
-            pointer-events: auto !important;
-          }
-
-          @media (max-width: 768px) {
-            .header-stats {
-              flex-direction: column;
-              gap: 8px;
-            }
-            
-            .stats-item {
-              min-width: 60px;
-              padding: 8px 12px;
-            }
-            
-            .legend-toggle-btn {
-              right: 5px;
-              top: 90px;
-              min-width: 80px;
-              padding: 10px 12px;
-            }
-
-            .legend-toggle-text {
-              font-size: 12px;
-            }
-            
-            .modern-legend {
-              width: 250px;
-              right: 5px;
-              top: 140px;
-            }
-            
-            .image-viewer-controls {
-              top: 10px;
-              right: 10px;
-              flex-direction: column;
-              gap: 8px;
-            }
-            
-            .control-group {
-              padding: 6px;
-            }
-            
-            .image-viewer-info {
-              bottom: 10px;
-              padding: 12px 20px;
-              max-width: 90vw;
-            }
-            
-            .viewer-image {
-              max-width: 95vw;
-              max-height: 70vh;
-            }
-          }
-        `}
-      </style>
     </div>
   );
 };
 
-export default MapView;
+export default MapViewAdmin;
