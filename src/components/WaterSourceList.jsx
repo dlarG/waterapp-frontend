@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import AdminLayout from "./AdminLayout";
 import {
   FaPlus,
   FaEdit,
@@ -431,37 +430,37 @@ const WaterSourceList = () => {
       </div>
     );
   }
+
   return (
-    <AdminLayout 
-      title="Water Sources Management"
-      subtitle="Monitor and manage water quality monitoring locations in Maasin City"
-      currentView="water-sources"
-    >
-      <div className="p-6">
-        {/* Header Section with Add Button */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-            <div className="mb-4 lg:mb-0">
-              <p className="text-gray-600">
-                Comprehensive management of water monitoring locations
-              </p>
-            </div>
-            
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleAdd}
-              className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
-            >
-              <FaPlus className="w-4 h-4" />
-              <span>Add New Location</span>
-            </motion.button>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Header Section */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Water Sources Management
+            </h1>
+            <p className="text-gray-600">
+              Monitor and manage water quality monitoring locations in Maasin
+              City
+            </p>
           </div>
-        </motion.div>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleAdd}
+            className="mt-4 lg:mt-0 flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
+          >
+            <FaPlus className="w-4 h-4" />
+            <span>Add New Location</span>
+          </motion.button>
+        </div>
+      </motion.div>
 
       {/* Filters and Search */}
       <motion.div
@@ -1072,9 +1071,9 @@ const WaterSourceList = () => {
               </div>
             )}
           </motion.div>
-        </div>        )}
-      </div>
-    </AdminLayout>
+        </div>
+      )}
+    </div>
   );
 };
 

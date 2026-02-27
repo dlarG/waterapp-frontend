@@ -72,6 +72,15 @@ export const householdAPI = {
   getRiskAnalysis: () => apiRequest("/households/risk-analysis"),
 };
 
+// Barangay API
+export const barangayAPI = {
+  // Get all barangays
+  getAll: () => apiRequest("/barangays"),
+
+  // Get unique barangays from existing water locations
+  getFromLocations: () => apiRequest("/barangays/from-locations"),
+};
+
 // Image upload API
 export const imageAPI = {
   // Upload image for water location
@@ -105,5 +114,6 @@ export default {
   healthAPI,
   adminAPI,
   householdAPI,
+  barangayAPI,
   imageAPI,
 };
