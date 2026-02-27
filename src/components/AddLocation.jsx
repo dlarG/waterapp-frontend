@@ -145,7 +145,6 @@ const AddLocation = () => {
     const [neLat, neLng] = MAASIN_CONFIG.bounds[1];
     return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
   }, []);
-
   // Load existing barangays from database
   useEffect(() => {
     const fetchBarangays = async () => {
@@ -160,28 +159,74 @@ const AddLocation = () => {
           console.error("Failed to fetch barangays:", result.error);
           // Fallback to default options
           setBarangayOptions([
-            "batuan",
-            "combado",
-            "hantag",
-            "malapoc-norte",
-            "malapoc-sur",
-            "matin_ao",
-            "rizal",
-            "san_isidro",
+            "Abgao",
+            "Asuncion",
+            "Batomelong",
+            "Bato",
+            "Batuan",
+            "Combado",
+            "Hantag",
+            "Hibatang",
+            "Icot",
+            "Ismerio",
+            "Kantagnos",
+            "Katipunan",
+            "Malapoc Norte",
+            "Malapoc Sur",
+            "Mantahan",
+            "Matin-ao",
+            "Nonok Norte",
+            "Nonok Sur",
+            "Panian",
+            "Poblacion Norte",
+            "Poblacion Sur",
+            "Rizal",
+            "San Agustin",
+            "San Isidro",
+            "San Roque",
+            "Santo Niño",
+            "Sooc",
+            "Tagnote",
+            "Tagum",
+            "Tomalistis",
+            "Tugas",
           ]);
         }
       } catch (error) {
         console.error("Error fetching barangays:", error);
         // Fallback to default options
         setBarangayOptions([
-          "batuan",
-          "combado",
-          "hantag",
-          "malapoc-norte",
-          "malapoc-sur",
-          "matin_ao",
-          "rizal",
-          "san_isidro",
+          "Abgao",
+          "Asuncion",
+          "Batomelong",
+          "Bato",
+          "Batuan",
+          "Combado",
+          "Hantag",
+          "Hibatang",
+          "Icot",
+          "Ismerio",
+          "Kantagnos",
+          "Katipunan",
+          "Malapoc Norte",
+          "Malapoc Sur",
+          "Mantahan",
+          "Matin-ao",
+          "Nonok Norte",
+          "Nonok Sur",
+          "Panian",
+          "Poblacion Norte",
+          "Poblacion Sur",
+          "Rizal",
+          "San Agustin",
+          "San Isidro",
+          "San Roque",
+          "Santo Niño",
+          "Sooc",
+          "Tagnote",
+          "Tagum",
+          "Tomalistis",
+          "Tugas",
         ]);
       } finally {
         setLoadingBarangays(false);
