@@ -128,11 +128,11 @@ const MapView = () => {
           ["get", "risk_score"],
           0,
           0,
-          50,
+          500,
           1,
         ],
         // Increase the heatmap color intensity based on zoom level
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 18, 3],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 10, 3],
         // Color ramp for heatmap - red indicates higher risk
         "heatmap-color": [
           "interpolate",
@@ -152,9 +152,7 @@ const MapView = () => {
           "rgb(178,24,43)",
         ],
         // Adjust the heatmap radius by zoom level
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 50],
-        // Transition from heatmap to circle layer by zoom level
-        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 1, 16, 0],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 40],
       },
     });
 
@@ -195,7 +193,7 @@ const MapView = () => {
       },
     });
 
-    // Add click handler for risk points
+    // Add click handler forMAA risk points
     map.current.on("click", "household-risk-points", (e) => {
       const coordinates = e.features[0].geometry.coordinates.slice();
       const properties = e.features[0].properties;
@@ -617,7 +615,7 @@ const MapView = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/satellite-streets-v12", // Use satellite streets for better visibility
+        style: "mapbox://styles/mapbox/outdoors-v12", // Use satellite streets for better visibility
         center: MAASIN_CONFIG.center,
         zoom: MAASIN_CONFIG.zoom,
         maxBounds: MAASIN_CONFIG.bounds, // 🔒 Lock map to Maasin area
@@ -900,8 +898,8 @@ const MapView = () => {
           const el = document.createElement("div");
           el.className = "custom-marker";
           el.style.cssText = `
-            width: 28px; 
-            height: 28px; 
+            width: 16px; 
+            height: 16px; 
             border-radius: 50%;
             background-color: ${getStatusColor(
               location.water_status,
@@ -1120,7 +1118,7 @@ const MapView = () => {
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <div className="modern-header">
+      {/* <div className="modern-header">
         <div className="header-content">
           <div className="header-left">
             <button
@@ -1141,7 +1139,7 @@ const MapView = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       <div className="view-toggle-container">
         <button
@@ -1154,9 +1152,9 @@ const MapView = () => {
           {heatmapLoading ? (
             <span>Loading...</span>
           ) : viewMode === "markers" ? (
-            <>🗺️ Show Risk Heatmap</>
+            <>Show Risk Heatmap</>
           ) : (
-            <>📍 Show Water Sources</>
+            <>Show Water Sources</>
           )}
         </button>
 
@@ -1382,561 +1380,6 @@ const MapView = () => {
           </div>
         </div>
       )}
-
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          
-          .mapboxgl-popup-close-button {
-            font-size: 20px;
-            color: white;
-            right: 5px;
-            top: 5px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-          }
-
-          .modern-header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
-            color: white;
-            padding: 5px 24px;
-            z-index: 20;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-          }
-
-          .view-toggle-container {
-            position: absolute;
-            top: 80px;
-            right: 20px;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-          }
-
-          .view-toggle-btn {
-            background: rgba(255, 255, 255, 0.95);
-            color: #374151;
-            border: 2px solid #e5e7eb;
-            padding: 12px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            min-width: 180px;
-          }
-
-          .view-toggle-btn:hover {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: #3b82f6;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-          }
-
-          .view-toggle-btn.active {
-            background: #3b82f6;
-            color: white;
-            border-color: #2563eb;
-          }
-
-          .view-toggle-btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none;
-          }
-
-          /* Heatmap Legend Styles */
-          .heatmap-legend {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e5e7eb;
-            max-width: 200px;
-          }
-
-          .heatmap-legend h4 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #374151;
-          }
-
-          .legend-items {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 10px;
-          }
-
-          .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: #4b5563;
-          }
-
-          .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-          }
-
-          .legend-color.low-risk {
-            background: #2563eb;
-          }
-
-          .legend-color.medium-risk {
-            background: #f59e0b;
-          }
-
-          .legend-color.high-risk {
-            background: #ef4444;
-          }
-
-          .legend-description {
-            font-size: 11px;
-            color: #6b7280;
-            margin: 8px 0 0 0;
-            line-height: 1.3;
-          }
-
-          @media (max-width: 768px) {
-            .view-toggle-container {
-              top: 70px;
-              right: 10px;
-            }
-
-            .view-toggle-btn {
-              min-width: 140px;
-              padding: 10px 15px;
-              font-size: 12px;
-            }
-
-            .heatmap-legend {
-              max-width: 160px;
-              padding: 12px;
-            }
-          }
-          
-          .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-          }
-          
-          .back-button {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-          }
-          
-          .back-button:hover {
-            background: rgba(255, 255, 255, 0.25);
-            transform: translateX(-2px);
-          }
-          
-          .header-title h1 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-          }
-          
-          .header-title p {
-            margin: 4px 0 0;
-            font-size: 13px;
-            opacity: 0.9;
-          }
-          
-          .header-stats {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-          }
-          
-          .stats-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 5px 10px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-            min-width: 80px;
-          }
-          
-          .stats-value {
-            font-size: 20px;
-            font-weight: 700;
-          }
-          
-          .stats-label {
-            font-size: 12px;
-            opacity: 0.9;
-            margin-top: 4px;
-          }
-
-          /* Legend Toggle Button */
-          .legend-toggle-btn {
-            position: absolute;
-            top: 80px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            padding: 12px 16px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            color: #374151;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-            z-index: 21;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 100px;
-            justify-content: center;
-          }
-
-          .legend-toggle-btn:hover {
-            background: rgba(255, 255, 255, 1);
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-          }
-
-          .legend-toggle-icon {
-            font-size: 16px;
-            transition: transform 0.3s ease;
-          }
-
-          .legend-toggle-text {
-            font-size: 13px;
-          }
-
-          /* Updated Legend Styles */
-          .modern-legend {
-            position: absolute;
-            top: 130px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border-radius: 16px;
-            padding: 20px;
-            width: 280px;
-            z-index: 20;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-origin: top right;
-          }
-
-          .legend-open {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-            visibility: visible;
-          }
-
-          .legend-closed {
-            opacity: 0;
-            transform: scale(0.9) translateY(-20px);
-            visibility: hidden;
-            pointer-events: none;
-          }
-          
-          .legend-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-          }
-          
-          .legend-icon {
-            font-size: 24px;
-            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-          }
-          
-          .legend-header h3 {
-            margin: 0;
-            font-size: 18px;
-            font-weight: 700;
-            color: #1f2937;
-          }
-          
-          .legend-items {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 20px;
-          }
-          
-          .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            cursor: default;
-          }
-          
-          .legend-item:hover {
-            background: rgba(37, 99, 235, 0.05);
-          }
-          
-          .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          }
-          
-          .legend-color.safe { background: #10b981; }
-          .legend-color.undrinkable { background: #f59e0b; }
-          .legend-color.hazard { background: #ef4444; }
-          .legend-color.pending { background: #9ca3af; }
-          
-          .legend-item span {
-            font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-          }
-
-          /* NEW: Image Viewer Styles */
-          .image-viewer-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-          }
-
-          .image-viewer-controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            gap: 15px;
-            z-index: 1001;
-          }
-
-          .control-group {
-            display: flex;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 8px;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-          }
-
-          .control-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 10px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            min-width: 40px;
-          }
-
-          .control-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-          }
-
-          .close-btn {
-            background: rgba(239, 68, 68, 0.8) !important;
-          }
-
-          .close-btn:hover {
-            background: rgba(239, 68, 68, 1) !important;
-          }
-
-          .zoom-display {
-            color: white;
-            font-size: 12px;
-            padding: 10px 8px;
-            font-weight: 600;
-            min-width: 50px;
-            text-align: center;
-          }
-
-          .image-viewer-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            position: relative;
-          }
-
-          .viewer-image {
-            max-width: 90vw;
-            max-height: 80vh;
-            object-fit: contain;
-            transition: transform 0.3s ease;
-            user-select: none;
-          }
-
-          .image-viewer-info {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            max-width: 80vw;
-          }
-
-          .image-viewer-info h3 {
-            margin: 0 0 5px 0;
-            font-size: 16px;
-            font-weight: 600;
-          }
-
-          .image-viewer-info p {
-            margin: 0;
-            font-size: 12px;
-            opacity: 0.8;
-            line-height: 1.4;
-          }
-          
-          .mapboxgl-popup-content {
-            padding: 10px;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            max-height: 80vh;
-            overflow-y: auto;
-          }
-          
-          .mapboxgl-marker {
-            position: absolute;
-            will-change: transform;
-          }
-          
-          .custom-marker {
-            position: absolute;
-            top: 0;
-            left: 0;
-          }
-          
-          .mapboxgl-marker-container {
-            pointer-events: auto !important;
-          }
-
-          @media (max-width: 768px) {
-            .header-stats {
-              flex-direction: column;
-              gap: 8px;
-            }
-            
-            .stats-item {
-              min-width: 60px;
-              padding: 8px 12px;
-            }
-            
-            .legend-toggle-btn {
-              right: 5px;
-              top: 90px;
-              min-width: 80px;
-              padding: 10px 12px;
-            }
-
-            .legend-toggle-text {
-              font-size: 12px;
-            }
-            
-            .modern-legend {
-              width: 250px;
-              right: 5px;
-              top: 140px;
-            }
-            
-            .image-viewer-controls {
-              top: 10px;
-              right: 10px;
-              flex-direction: column;
-              gap: 8px;
-            }
-            
-            .control-group {
-              padding: 6px;
-            }
-            
-            .image-viewer-info {
-              bottom: 10px;
-              padding: 12px 20px;
-              max-width: 90vw;
-            }
-            
-            .viewer-image {
-              max-width: 95vw;
-              max-height: 70vh;
-            }
-          }
-        `}
-      </style>
     </div>
   );
 };

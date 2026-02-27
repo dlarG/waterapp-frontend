@@ -7,6 +7,8 @@ import "./App.css";
 import AuthPage from "./auth/AuthPage";
 import Dashboard from "./components/Dashboard";
 import MapViewAdmin from "./MapViewAdmin";
+import AddLocation from "./components/AddLocation";
+import WaterSourceList from "./components/WaterSourceList";
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin/map" element={<MapViewAdmin />} />
+            <Route path="/admin/add-location" element={<AddLocation />} />
+            <Route path="/admin/locations" element={<WaterSourceList />} />
           </Routes>
         </div>
       </Router>
