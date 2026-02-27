@@ -1,5 +1,11 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  useMapEvents,
+  Popup,
+} from "react-leaflet";
 import { waterLocationAPI, imageAPI } from "../api/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +23,46 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
+// Create custom icons using SVG for reliable colors
+const createColoredIcon = (color) => {
+  return L.divIcon({
+    className: "custom-marker",
+    html: `
+      <svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.4 0 0 5.4 0 12c0 6 12 24 12 24s12-18 12-24c0-6.6-5.4-12-12-12z" fill="${color}" stroke="#FFFFFF" stroke-width="2"/>
+        <circle cx="12" cy="12" r="5" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="2"/>
+      </svg>
+    `,
+    iconSize: [24, 36],
+    iconAnchor: [12, 36],
+    popupAnchor: [0, -30],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+    shadowSize: [41, 41],
+    shadowAnchor: [12, 41],
+  });
+};
+
+const newLocationIcon = createColoredIcon("#3498db"); // Blue for new
+
+// Alternative: Use CDN with fallback to colored icons
+const getMarkerIcon = (color) => {
+  // Try to use colored CDN markers with fallback
+  try {
+    return new L.Icon({
+      iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+      shadowUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+      iconSize: [9, 15],
+      iconAnchor: [9, 11],
+      popupAnchor: [1, -14],
+      shadowSize: [19, 12],
+    });
+  } catch {
+    return createColoredIcon(color === "blue" ? "#3498db" : "#FF4444");
+  }
+};
+
 // Maasin City configuration
 const MAASIN_CONFIG = {
   center: [10.173022, 124.825287],
@@ -30,7 +76,9 @@ const MAASIN_CONFIG = {
 const AddLocation = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const mapRef = useRef(null); // Form state
+  const mapRef = useRef(null);
+
+  // Form state
   const [formData, setFormData] = useState({
     full_name: "",
     description: "",
@@ -43,6 +91,11 @@ const AddLocation = () => {
     sample_time: "",
     image_path: "",
   });
+
+  // New state for existing locations
+  const [existingLocations, setExistingLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(true);
+  const [locationsError, setLocationsError] = useState(null);
 
   // New state for enhanced barangay handling
   const [createNewBarangay, setCreateNewBarangay] = useState(false);
@@ -60,6 +113,32 @@ const AddLocation = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Fetch existing water locations
+  useEffect(() => {
+    const fetchExistingLocations = async () => {
+      try {
+        setLoadingLocations(true);
+        const response = await waterLocationAPI.getAll();
+
+        if (response.success) {
+          setExistingLocations(response.data || []);
+          setLocationsError(null);
+        } else {
+          setLocationsError("Failed to load existing locations");
+          console.error("Failed to fetch locations:", response.error);
+        }
+      } catch (error) {
+        setLocationsError("Error loading existing locations");
+        console.error("Error fetching locations:", error);
+      } finally {
+        setLoadingLocations(false);
+      }
+    };
+
+    fetchExistingLocations();
+  }, []);
+
   // Check if coordinates are within Maasin bounds
   const isWithinBounds = useCallback((lat, lng) => {
     const [swLat, swLng] = MAASIN_CONFIG.bounds[0];
@@ -111,6 +190,7 @@ const AddLocation = () => {
 
     fetchBarangays();
   }, []);
+
   // Simple bacteria test result handling
   const handleBacteriaResultChange = (bacteriaType, result) => {
     setBacteriaTestResults((prev) => ({
@@ -166,7 +246,78 @@ const AddLocation = () => {
     return null;
   };
 
-  // Custom draggable marker component
+  // Component to display existing locations
+  const ExistingLocationsMarkers = () => {
+    return (
+      <>
+        {existingLocations.map((location) => {
+          // Determine icon color based on water quality if available
+          let icon = getMarkerIcon("black"); // Default gray for existing locations
+          if (
+            location.coliform_bacteria === false &&
+            location.e_coli === false
+          ) {
+            icon = getMarkerIcon("green"); // Green for safe water
+          } else if (
+            location.coliform_bacteria === true ||
+            location.e_coli === true
+          ) {
+            icon = getMarkerIcon("red"); // Red for unsafe water
+          }
+
+          return (
+            <Marker
+              key={location.id}
+              position={[location.latitude, location.longitude]}
+              icon={icon}
+            >
+              <Popup>
+                <div className="p-2 max-w-xs">
+                  <h3 className="font-bold text-lg">{location.full_name}</h3>
+                  {location.barangay && (
+                    <p className="text-sm text-gray-600">
+                      Barangay: {location.barangay}
+                    </p>
+                  )}
+                  {location.sample_date && (
+                    <p className="text-sm text-gray-600">
+                      Sample Date:{" "}
+                      {new Date(location.sample_date).toLocaleDateString()}
+                    </p>
+                  )}
+                  {(location.coliform_bacteria !== null ||
+                    location.e_coli !== null) && (
+                    <div className="mt-2">
+                      <p className="text-sm font-semibold">Water Quality:</p>
+                      {location.coliform_bacteria !== null && (
+                        <p className="text-sm">
+                          Coliform:{" "}
+                          {location.coliform_bacteria ? "Present" : "Absent"}
+                        </p>
+                      )}
+                      {location.e_coli !== null && (
+                        <p className="text-sm">
+                          E. Coli: {location.e_coli ? "Present" : "Absent"}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {location.image_path && (
+                    <p className="text-xs text-blue-600 mt-1">📸 Has image</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">
+                    ID: {location.id}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+      </>
+    );
+  };
+
+  // Custom draggable marker component for new location
   const DraggableMarker = () => {
     const markerRef = useRef(null);
 
@@ -202,10 +353,12 @@ const AddLocation = () => {
           parseFloat(formData.latitude),
           parseFloat(formData.longitude),
         ]}
+        icon={newLocationIcon}
         ref={markerRef}
       />
     );
   };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
 
@@ -243,6 +396,7 @@ const AddLocation = () => {
       }));
     }
   };
+
   const handleCoordinateChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -257,6 +411,7 @@ const AddLocation = () => {
       }));
     }
   };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -275,6 +430,7 @@ const AddLocation = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -444,7 +600,8 @@ const AddLocation = () => {
                     {errors.full_name}
                   </p>
                 )}
-              </div>{" "}
+              </div>
+
               {/* Enhanced Barangay Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -512,6 +669,7 @@ const AddLocation = () => {
                   </p>
                 )}
               </div>
+
               {/* Coordinates */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -560,7 +718,8 @@ const AddLocation = () => {
                     </p>
                   )}
                 </div>
-              </div>{" "}
+              </div>
+
               {/* Simplified Water Quality Tests */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -681,6 +840,7 @@ const AddLocation = () => {
                   </p>
                 </div>
               </div>
+
               {/* Sample Date and Time */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -708,6 +868,7 @@ const AddLocation = () => {
                   />
                 </div>
               </div>
+
               {/* Image Upload Section */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -822,6 +983,7 @@ const AddLocation = () => {
                   Supported formats: JPEG, PNG, GIF, WEBP (Max: 16MB)
                 </p>
               </div>
+
               {/* Submit Button */}
               <div className="flex justify-end space-x-4 pt-4">
                 <button
@@ -852,13 +1014,26 @@ const AddLocation = () => {
           {/* Map Section */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Select Location on Map
-              </h3>
-              <p className="text-sm text-gray-600">
-                Click on the map or drag the marker to set the location
-              </p>
-            </div>{" "}
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Select Location on Map
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Click on the map or drag the blue marker to set the location
+                  </p>
+                </div>
+              </div>
+              {loadingLocations && (
+                <p className="text-sm text-gray-500 mt-2">
+                  Loading existing locations...
+                </p>
+              )}
+              {locationsError && (
+                <p className="text-sm text-red-500 mt-2">⚠️ {locationsError}</p>
+              )}
+            </div>
+
             <div className="relative h-96">
               <MapContainer
                 center={MAASIN_CONFIG.center}
@@ -873,25 +1048,46 @@ const AddLocation = () => {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
                 <MapClickHandler />
+                <ExistingLocationsMarkers />
                 <DraggableMarker />
               </MapContainer>
             </div>
+
             <div className="p-4 bg-gray-50 text-sm text-gray-600">
               <p>
                 <strong>Instructions:</strong>
               </p>
               <ul className="list-disc list-inside space-y-1 mt-1">
-                <li>Click anywhere on the map to place a marker</li>
-                <li>Drag the blue marker to adjust the position</li>
+                <li>🔵 Blue marker is your new location (draggable)</li>
                 <li>
-                  Enter coordinates manually to position the marker precisely
+                  🔴 Red markers show existing locations with unsafe water
                 </li>
+                <li>
+                  🟢 Green markers show existing locations with safe water
+                </li>
+                <li>
+                  ⚫ Gray markers show existing locations with no test data
+                </li>
+                <li>Click on any marker to view location details</li>
+                <li>Click anywhere on the map to place the blue marker</li>
+                <li>Drag the blue marker to adjust the position precisely</li>
                 <li>The marker is restricted to the Maasin City area</li>
               </ul>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Add custom CSS for markers */}
+      <style jsx>{`
+        .custom-marker {
+          background: none;
+          border: none;
+        }
+        .custom-marker svg {
+          filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
+        }
+      `}</style>
     </div>
   );
 };
