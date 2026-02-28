@@ -39,6 +39,19 @@ export const waterLocationAPI = {
       body: JSON.stringify(locationData),
     }),
 
+  // Update water location
+  update: (id, locationData) =>
+    apiRequest(`/water-locations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(locationData),
+    }),
+
+  // Delete water location
+  delete: (id) =>
+    apiRequest(`/water-locations/${id}`, {
+      method: "DELETE",
+    }),
+
   // Get map bounds for Maasin
   getMapBounds: () => apiRequest("/map-bounds"),
 };

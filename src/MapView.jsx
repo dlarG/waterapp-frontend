@@ -17,6 +17,16 @@ const MapView = () => {
   const [householdData, setHouseholdData] = useState([]);
   const [riskData, setRiskData] = useState([]);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
+  const [heatmapIntensity, setHeatmapIntensity] = useState(0.5);
+  const [showContaminatedSources, setShowContaminatedSources] = useState(true);
+  // eslint-disable-next-line no-unused-vars
+  const [riskStats, setRiskStats] = useState({
+    totalRiskZones: 0,
+    highRiskZones: 0,
+    mediumRiskZones: 0,
+    lowRiskZones: 0,
+    avgRiskScore: 0,
+  });
 
   const fetchHouseholdData = async () => {
     try {
@@ -45,7 +55,13 @@ const MapView = () => {
 
       if (riskResponse.success) {
         setRiskData(riskResponse.data);
+
+        // Calculate statistics
+        const stats = calculateRiskStats(riskResponse.data);
+        setRiskStats(stats);
+
         console.log(`✅ Loaded ${riskResponse.data.length} risk zones`);
+        console.log("📊 Risk Statistics:", stats);
       } else {
         console.error("❌ Risk analysis request failed:", riskResponse.error);
       }
@@ -57,9 +73,37 @@ const MapView = () => {
     }
   };
 
-  // NEW: Add heatmap layer
+  // Calculate risk statistics
+  const calculateRiskStats = (data) => {
+    if (!data.length)
+      return {
+        totalRiskZones: 0,
+        highRiskZones: 0,
+        mediumRiskZones: 0,
+        lowRiskZones: 0,
+        avgRiskScore: 0,
+      };
+
+    const highRisk = data.filter((d) => d.risk_score > 25).length;
+    const mediumRisk = data.filter(
+      (d) => d.risk_score > 10 && d.risk_score <= 25
+    ).length;
+    const lowRisk = data.filter((d) => d.risk_score <= 10).length;
+    const avgScore =
+      data.reduce((sum, d) => sum + d.risk_score, 0) / data.length;
+
+    return {
+      totalRiskZones: data.length,
+      highRiskZones: highRisk,
+      mediumRiskZones: mediumRisk,
+      lowRiskZones: lowRisk,
+      avgRiskScore: Math.round(avgScore * 10) / 10,
+    };
+  };
+
+  // ENHANCED: Add heatmap layer with multiple visualization options
   const addHeatmapLayer = () => {
-    console.log("🗺️ Adding heatmap layer...");
+    console.log("🗺️ Adding enhanced heatmap layer...");
     console.log("Map available:", !!map.current);
     console.log("Risk data length:", riskData.length);
 
@@ -76,19 +120,14 @@ const MapView = () => {
       return;
     }
 
-    // Remove existing heatmap layer if it exists
-    if (map.current.getLayer("household-heatmap")) {
-      console.log("🗑️ Removing existing heatmap layer");
-      map.current.removeLayer("household-heatmap");
-    }
-    if (map.current.getSource("household-heatmap")) {
-      map.current.removeSource("household-heatmap");
-    }
-    if (map.current.getLayer("household-risk-points")) {
-      map.current.removeLayer("household-risk-points");
-    }
+    // Remove existing layers if they exist
+    removeHeatmapLayer();
 
-    console.log("📊 Creating heatmap with", riskData.length, "risk points");
+    console.log(
+      "📊 Creating enhanced heatmap with",
+      riskData.length,
+      "risk points"
+    );
 
     // Prepare GeoJSON data for heatmap
     const heatmapData = {
@@ -103,7 +142,14 @@ const MapView = () => {
           risk_score: point.risk_score,
           household_count: point.household_count,
           water_source: point.water_source,
-          contamination: point.contamination_type,
+          coliform: point.contamination_type?.coliform || false,
+          e_coli: point.contamination_type?.e_coli || false,
+          risk_level:
+            point.risk_score > 25
+              ? "high"
+              : point.risk_score > 10
+              ? "medium"
+              : "low",
         },
       })),
     };
@@ -114,144 +160,444 @@ const MapView = () => {
       data: heatmapData,
     });
 
-    // Add heatmap layer
+    // ENHANCED: Main heatmap layer with better color gradient
     map.current.addLayer({
       id: "household-heatmap",
       type: "heatmap",
       source: "household-heatmap",
       maxzoom: 18,
       paint: {
-        // Increase the heatmap weight based on risk score
+        // Increase the heatmap weight based on risk score with exponential scaling
         "heatmap-weight": [
           "interpolate",
           ["linear"],
           ["get", "risk_score"],
           0,
           0,
-          500,
-          1,
+          5,
+          0.3,
+          25,
+          0.6,
+          50,
+          1.0,
+          100,
+          1.3,
         ],
-        // Increase the heatmap color intensity based on zoom level
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 10, 3],
-        // Color ramp for heatmap - red indicates higher risk
+
+        // ENHANCED: Dynamically adjust intensity based on zoom level
+        // Lower intensity when zoomed out, higher when zoomed in
+        "heatmap-intensity": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          0,
+          heatmapIntensity * 0.8,
+          10,
+          heatmapIntensity * 1.2,
+          18,
+          heatmapIntensity * 1.5,
+        ],
+
+        // ENHANCED: More intuitive color ramp - blue (low) to red (high)
         "heatmap-color": [
           "interpolate",
           ["linear"],
           ["heatmap-density"],
           0,
-          "rgba(33,102,172,0)",
-          0.2,
-          "rgb(103,169,207)",
-          0.4,
-          "rgb(209,229,240)",
-          0.6,
-          "rgb(253,219,199)",
-          0.8,
-          "rgb(239,138,98)",
+          "rgba(0, 0, 255, 0)", // Transparent blue
+          0.1,
+          "rgba(65, 105, 225, 0.2)", // Very light blue at low density
+          0.3,
+          "rgba(65, 105, 225, 0.5)", // Light blue
+          0.5,
+          "rgba(255, 255, 0, 0.6)", // Yellow
+          0.7,
+          "rgba(255, 165, 0, 0.8)", // Orange
+          0.9,
+          "rgba(255, 69, 0, 0.9)", // Red-orange
           1,
-          "rgb(178,24,43)",
+          "rgba(139, 0, 0, 1)", // Dark red
         ],
-        // Adjust the heatmap radius by zoom level
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 18, 40],
+
+        // ENHANCED: Adjust heatmap radius by zoom level - smaller when zoomed out
+        "heatmap-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          0,
+          5, // Very small radius at far zoom (was 15)
+          8,
+          10, // Small at medium zoom
+          12,
+          20, // Medium at closer zoom
+          16,
+          35, // Larger at very close zoom
+          18,
+          50, // Largest at max zoom
+        ],
+
+        // ENHANCED: Opacity also varies with zoom
+        "heatmap-opacity": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          0,
+          0.4, // More transparent when zoomed out
+          8,
+          0.6,
+          12,
+          0.7,
+          16,
+          0.8,
+          18,
+          0.9, // More opaque when zoomed in
+        ],
       },
     });
 
-    // Add circle layer for high zoom levels
+    // UPDATED: Smaller cluster layer for mid-level zoom
     map.current.addLayer({
-      id: "household-risk-points",
+      id: "risk-clusters",
       type: "circle",
       source: "household-heatmap",
-      minzoom: 14,
+      minzoom: 18, // Start showing at zoom 13
+      maxzoom: 2, // Hide after zoom 15
       paint: {
-        // Size circle radius by risk score
         "circle-radius": [
           "interpolate",
           ["linear"],
           ["get", "risk_score"],
-          1,
-          4,
-          50,
-          20,
-        ],
-        // Color circle by risk score
-        "circle-color": [
-          "interpolate",
-          ["linear"],
-          ["get", "risk_score"],
           0,
-          "#2563eb",
-          10,
-          "#f59e0b",
+          3, // Reduced from 5
           25,
-          "#ef4444",
+          6, // Reduced from 10
           50,
-          "#991b1b",
+          9, // Reduced from 15
+          100,
+          12, // Reduced from 20
+        ],
+        "circle-color": [
+          "match",
+          ["get", "risk_level"],
+          "high",
+          "#ef4444",
+          "medium",
+          "#f97316",
+          "low",
+          "#3b82f6",
+          "#9ca3af",
         ],
         "circle-stroke-color": "white",
-        "circle-stroke-width": 1,
-        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 16, 1],
+        "circle-stroke-width": 1, // Reduced from 2
+        "circle-opacity": 0.7, // Reduced from 0.8
       },
     });
 
-    // Add click handler forMAA risk points
+    // UPDATED: Smaller household risk points for high zoom levels
+    map.current.addLayer({
+      id: "household-risk-points",
+      type: "circle",
+      source: "household-heatmap",
+      minzoom: 15, // Only show at zoom 15 and higher
+      paint: {
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["get", "household_count"],
+          1,
+          3,
+          10,
+          5,
+          50,
+          8,
+        ],
+        "circle-color": [
+          "case",
+          ["==", ["get", "e_coli"], true],
+          "#ef4444",
+          ["==", ["get", "coliform"], true],
+          "#f97316",
+          "#3b82f6",
+        ],
+        "circle-stroke-color": "white",
+        "circle-stroke-width": 1,
+        "circle-opacity": 0.8,
+      },
+    });
+
+    // Add contaminated water sources as markers if enabled
+    if (showContaminatedSources) {
+      // Get unique contaminated water sources
+      const contaminatedSources = [
+        ...new Map(
+          riskData.map((item) => [
+            item.water_source,
+            {
+              name: item.water_source,
+              contamination: item.contamination_type,
+              coordinates: [item.longitude, item.latitude],
+            },
+          ])
+        ).values(),
+      ];
+
+      const sourceData = {
+        type: "FeatureCollection",
+        features: contaminatedSources.map((source) => ({
+          type: "Feature",
+          geometry: {
+            type: "Point",
+            coordinates: source.coordinates,
+          },
+          properties: {
+            name: source.name,
+            coliform: source.contamination?.coliform || false,
+            e_coli: source.contamination?.e_coli || false,
+          },
+        })),
+      };
+
+      map.current.addSource("contaminated-sources", {
+        type: "geojson",
+        data: sourceData,
+      });
+
+      // UPDATED: Contaminated sources with zoom-based visibility
+      map.current.addLayer({
+        id: "contaminated-sources",
+        type: "circle",
+        source: "contaminated-sources",
+        minzoom: 10,
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            3, // Tiny at zoom 10
+            12,
+            4,
+            14,
+            5,
+            16,
+            6,
+            18,
+            8, // Larger at max zoom
+          ],
+          "circle-color": [
+            "case",
+            ["==", ["get", "e_coli"], true],
+            "#dc2626",
+            ["==", ["get", "coliform"], true],
+            "#f97316",
+            "#9ca3af",
+          ],
+          "circle-stroke-color": "white",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            0.5, // More transparent at lower zoom
+            14,
+            0.7,
+            18,
+            0.9,
+          ],
+        },
+      });
+      // UPDATED: Labels only show at higher zoom levels
+      map.current.addLayer({
+        id: "contaminated-sources-labels",
+        type: "symbol",
+        source: "contaminated-sources",
+        minzoom: 14, // Show labels at zoom 14 and higher
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14,
+            8,
+            16,
+            10,
+            18,
+            12,
+          ],
+          "text-offset": [0, 1.2],
+          "text-anchor": "top",
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": "#dc2626",
+          "text-halo-color": "white",
+          "text-halo-width": 2,
+          "text-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14,
+            0.6,
+            16,
+            0.8,
+            18,
+            1,
+          ],
+        },
+      });
+    }
+
+    // Add click handler for risk points with enhanced popup
     map.current.on("click", "household-risk-points", (e) => {
       const coordinates = e.features[0].geometry.coordinates.slice();
       const properties = e.features[0].properties;
 
-      // Create popup for risk area
-      new mapboxgl.Popup()
+      // Create enhanced popup for risk area
+      new mapboxgl.Popup({
+        className: "risk-popup",
+        maxWidth: "350px",
+      })
         .setLngLat(coordinates)
         .setHTML(
           `
-          <div style="padding: 15px; max-width: 300px;">
-            <h3 style="margin: 0 0 10px 0; color: #dc2626; font-size: 14px;">
-              ⚠️ High Risk Area
-            </h3>
-            <div style="margin-bottom: 8px;">
-              <strong>Households:</strong> ${properties.household_count}
-            </div>
-            <div style="margin-bottom: 8px;">
-              <strong>Risk Score:</strong> ${Math.round(properties.risk_score)}
-            </div>
-            <div style="margin-bottom: 8px;">
-              <strong>Nearby Contaminated Source:</strong><br>
-              ${properties.water_source}
-            </div>
-            <div style="font-size: 11px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-              This area shows increased risk due to proximity to contaminated water sources and household density.
-            </div>
+      <div style="padding: 15px;">
+        <h3 style="margin: 0 0 12px 0; color: #1f2937; font-size: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">
+          ⚠️ Risk Assessment
+        </h3>
+        
+        <div style="margin-bottom: 12px; background: #f3f4f6; padding: 10px; border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="color: #4b5563;">Risk Level:</span>
+            <span style="font-weight: 600; color: ${
+              properties.risk_score > 25
+                ? "#dc2626"
+                : properties.risk_score > 10
+                ? "#f97316"
+                : "#2563eb"
+            }">
+              ${
+                properties.risk_score > 25
+                  ? "HIGH"
+                  : properties.risk_score > 10
+                  ? "MEDIUM"
+                  : "LOW"
+              }
+            </span>
           </div>
-        `
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="color: #4b5563;">Risk Score:</span>
+            <span style="font-weight: 600;">${Math.round(
+              properties.risk_score
+            )}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #4b5563;">Households:</span>
+            <span style="font-weight: 600;">${properties.household_count}</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">Nearby Contaminated Source:</h4>
+          <p style="margin: 0; color: #4b5563; font-size: 13px; background: #f9fafb; padding: 8px; border-radius: 4px;">
+            ${properties.water_source}
+          </p>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">Contamination Type:</h4>
+          <div style="display: flex; gap: 10px;">
+            ${
+              properties.coliform
+                ? '<span style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">Coliform</span>'
+                : ""
+            }
+            ${
+              properties.e_coli
+                ? '<span style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">E. Coli</span>'
+                : ""
+            }
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: #6b7280; margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+          Click for more details • High risk areas require immediate attention
+        </div>
+      </div>
+    `
         )
         .addTo(map.current);
     });
 
-    // Change cursor on hover
-    map.current.on("mouseenter", "household-risk-points", () => {
-      map.current.getCanvas().style.cursor = "pointer";
+    // Add click handler for clusters
+    map.current.on("click", "risk-clusters", (e) => {
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
+
+      new mapboxgl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(
+          `
+      <div style="padding: 10px;">
+        <h4 style="margin: 0 0 5px 0;">Risk Cluster</h4>
+        <p>Risk Level: ${properties.risk_level.toUpperCase()}</p>
+        <p>Risk Score: ${Math.round(properties.risk_score)}</p>
+        <p>Zoom in to see individual household markers</p>
+      </div>
+    `
+        )
+        .addTo(map.current);
     });
 
-    map.current.on("mouseleave", "household-risk-points", () => {
-      map.current.getCanvas().style.cursor = "";
-    });
+    // Change cursor on hover for interactive elements
+    ["household-risk-points", "risk-clusters", "contaminated-sources"].forEach(
+      (layerId) => {
+        if (map.current.getLayer(layerId)) {
+          map.current.on("mouseenter", layerId, () => {
+            map.current.getCanvas().style.cursor = "pointer";
+          });
+
+          map.current.on("mouseleave", layerId, () => {
+            map.current.getCanvas().style.cursor = "";
+          });
+        }
+      }
+    );
   };
 
+  // FIXED: Remove heatmap layer with proper order
   const removeHeatmapLayer = () => {
     if (!map.current) return;
 
-    // Remove layers and source
-    ["household-heatmap", "household-risk-points"].forEach((layerId) => {
+    // Remove layers in reverse order (children before parents)
+    const layersToRemove = [
+      "contaminated-sources-labels", // Remove labels first
+      "contaminated-sources", // Then remove source circles
+      "household-risk-points",
+      "risk-clusters",
+      "risk-grid",
+      "household-heatmap",
+    ];
+
+    layersToRemove.forEach((layerId) => {
       if (map.current.getLayer(layerId)) {
         map.current.removeLayer(layerId);
       }
     });
 
-    if (map.current.getSource("household-heatmap")) {
-      map.current.removeSource("household-heatmap");
-    }
+    // Remove sources after all layers are removed
+    const sourcesToRemove = ["contaminated-sources", "household-heatmap"];
+    sourcesToRemove.forEach((sourceId) => {
+      if (map.current.getSource(sourceId)) {
+        map.current.removeSource(sourceId);
+      }
+    });
   };
 
-  // NEW: Toggle between views
+  // ENHANCED: Toggle between views with better state management
   const toggleViewMode = async () => {
     if (viewMode === "markers") {
       // Switch to heatmap
@@ -261,7 +607,9 @@ const MapView = () => {
 
       // Hide markers
       markersRef.current.forEach((marker) => {
-        marker.getElement().style.display = "none";
+        if (marker.getElement()) {
+          marker.getElement().style.display = "none";
+        }
       });
 
       // Show heatmap
@@ -273,10 +621,53 @@ const MapView = () => {
 
       // Show markers
       markersRef.current.forEach((marker) => {
-        marker.getElement().style.display = "block";
+        if (marker.getElement()) {
+          marker.getElement().style.display = "block";
+        }
       });
 
       setViewMode("markers");
+    }
+  };
+
+  // ENHANCED: Adjust heatmap intensity
+  const adjustHeatmapIntensity = (increase) => {
+    const newIntensity = increase
+      ? Math.min(heatmapIntensity + 0.3, 3)
+      : Math.max(heatmapIntensity - 0.3, 0.5);
+
+    setHeatmapIntensity(newIntensity);
+
+    if (viewMode === "heatmap" && map.current.getLayer("household-heatmap")) {
+      map.current.setPaintProperty("household-heatmap", "heatmap-intensity", [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        0,
+        newIntensity * 0.8,
+        10,
+        newIntensity * 1.2,
+        18,
+        newIntensity * 1.5,
+      ]);
+    }
+  };
+
+  // Toggle contaminated sources visibility
+  const toggleContaminatedSources = () => {
+    setShowContaminatedSources(!showContaminatedSources);
+
+    if (viewMode === "heatmap" && map.current) {
+      if (map.current.getLayer("contaminated-sources")) {
+        map.current.setLayoutProperty(
+          "contaminated-sources",
+          "visibility",
+          !showContaminatedSources ? "visible" : "none"
+        );
+      } else if (!showContaminatedSources) {
+        // Re-add the layer if it doesn't exist
+        addHeatmapLayer();
+      }
     }
   };
 
@@ -307,21 +698,62 @@ const MapView = () => {
     ],
   };
 
-  // Enhanced status color function with grey for no samples
-  const getStatusColor = (status, hasResults) => {
-    if (!hasResults) {
-      return "#9ca3af";
+  // UPDATED: Get water quality status and color based on new rules
+  const getWaterQualityInfo = (location) => {
+    const coliform = location.coliform_bacteria;
+    const eColi = location.e_coli;
+
+    // Case 1: No tests conducted (both null)
+    if (coliform === null && eColi === null) {
+      return {
+        status: "NO DATA",
+        color: "#9ca3af", // Gray
+        description:
+          "⏳ Water samples have not been collected or tested yet. Testing is required to determine water quality status.",
+      };
     }
-    switch (status) {
-      case "safe":
-        return "#10b981";
-      case "undrinkable":
-        return "#f59e0b";
-      case "hazard":
-        return "#ef4444";
-      default:
-        return "#9ca3af";
+
+    // Case 2: E. coli present (regardless of coliform status)
+    if (eColi === true) {
+      return {
+        status: "UNDRINKABLE",
+        color: "#ef4444", // Red
+        description:
+          "🚨 E. coli detected in water sample. This water is unsafe for drinking and requires treatment.",
+      };
     }
+
+    // Case 3: Coliform present but E. coli absent
+    if (coliform === true && (eColi === false || eColi === null)) {
+      return {
+        status: "WARNING",
+        color: "#f97316", // Orange
+        description:
+          "⚠️ Coliform bacteria detected but E. coli is absent. Further testing is recommended to ensure water safety.",
+      };
+    }
+
+    // Case 4: Both bacteria absent (safe)
+    if (
+      (coliform === false || coliform === null) &&
+      (eColi === false || eColi === null)
+    ) {
+      // Only mark as safe if both are explicitly false or one is false and other null
+      // But if one is true, it would have been caught above
+      return {
+        status: "SAFE",
+        color: "#10b981", // Green
+        description:
+          "✅ Water quality tests indicate this source is safe for drinking. No harmful bacteria detected.",
+      };
+    }
+
+    // Default fallback
+    return {
+      status: "UNKNOWN",
+      color: "#9ca3af", // Gray
+      description: "❓ Water quality status needs further evaluation.",
+    };
   };
 
   const hasTestResults = (location) => {
@@ -532,7 +964,7 @@ const MapView = () => {
 
     return `
       <div style="margin-bottom: 15px;">
-        <div class="image-container" onclick="window.openImageViewer('${imagePath}', '${locationName}')" style="
+        <div class="image-container" onclick="window.openImageViewer('/${imagePath}', '${locationName}')" style="
           position: relative;
           cursor: pointer;
           border-radius: 6px;
@@ -544,7 +976,7 @@ const MapView = () => {
         onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'"
         >
           <img 
-            src="${imagePath}" 
+            src="/${imagePath}" 
             alt="${locationName}"
             style="
               width: 100%;
@@ -615,18 +1047,18 @@ const MapView = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/outdoors-v12", // Use satellite streets for better visibility
+        style: "mapbox://styles/mapbox/streets-v12",
         center: MAASIN_CONFIG.center,
         zoom: MAASIN_CONFIG.zoom,
-        maxBounds: MAASIN_CONFIG.bounds, // 🔒 Lock map to Maasin area
-        maxBoundsViscosity: 1.0, // Prevent panning outside bounds
+        maxBounds: MAASIN_CONFIG.bounds,
+        maxBoundsViscosity: 1.0,
         projection: "mercator",
         attributionControl: true,
         trackResize: true,
         preserveDrawingBuffer: false,
         antialias: false,
         optimizeForTerrain: false,
-        failIfMajorPerformanceCaveat: false, // Allow map to load even on slower devices
+        failIfMajorPerformanceCaveat: false,
       });
 
       map.current.on("load", () => {
@@ -650,6 +1082,9 @@ const MapView = () => {
         }),
         "bottom-left"
       );
+
+      // Add fullscreen control
+      map.current.addControl(new mapboxgl.FullscreenControl(), "top-right");
     } catch (error) {
       console.error("❌ Map initialization error:", error);
       setMapStatus("error");
@@ -668,22 +1103,11 @@ const MapView = () => {
     };
   }, []);
 
-  // Status explanation helper
-  const getStatusExplanation = (status, hasResults) => {
-    if (!hasResults) {
-      return "⏳ This location has been identified but water samples have not been collected or tested yet. Testing is required to determine water quality status.";
-    }
-
-    switch (status) {
-      case "safe":
-        return "✅ Water quality tests indicate this source is safe for drinking. No harmful bacteria detected.";
-      case "undrinkable":
-        return "⚠️ Water quality tests show presence of bacteria. This water should be treated before consumption.";
-      case "hazard":
-        return "🚨 Water quality tests show bacterial contamination. This water is unsafe for drinking and requires treatment.";
-      default:
-        return "❓ Water quality status needs further evaluation.";
-    }
+  // UPDATED: Status explanation helper
+  const getStatusExplanation = (location) => {
+    // eslint-disable-next-line no-unused-vars
+    const { status, description } = getWaterQualityInfo(location);
+    return description;
   };
 
   // Add markers when map and data are ready
@@ -695,6 +1119,8 @@ const MapView = () => {
 
   // ENHANCED: Create popup content with clickable images
   const createPopupContent = (location) => {
+    const { status, color } = getWaterQualityInfo(location);
+    // eslint-disable-next-line no-unused-vars
     const hasResults = hasTestResults(location);
 
     return `
@@ -742,14 +1168,11 @@ const MapView = () => {
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
-            background-color: ${getStatusColor(
-              location.water_status,
-              hasResults
-            )};
+            background-color: ${color};
             color: white;
             letter-spacing: 0.5px;
           ">
-            ${hasResults ? location.water_status : "NO SAMPLE YET"}
+            ${status}
           </div>
         </div>
 
@@ -847,10 +1270,7 @@ const MapView = () => {
           background: #f9fafb;
           padding: 10px;
           border-radius: 6px;
-          border-left: 4px solid ${getStatusColor(
-            location.water_status,
-            hasResults
-          )};
+          border-left: 4px solid ${color};
           margin-top: 10px;
         ">
           <div style="
@@ -858,7 +1278,7 @@ const MapView = () => {
             color: #4b5563;
             line-height: 1.4;
           ">
-            ${getStatusExplanation(location.water_status, hasResults)}
+            ${getStatusExplanation(location)}
           </div>
         </div>
       </div>
@@ -880,7 +1300,7 @@ const MapView = () => {
 
     locations.forEach((location) => {
       if (location.latitude && location.longitude) {
-        const hasResults = hasTestResults(location);
+        const { color } = getWaterQualityInfo(location);
         const lngLat = [location.longitude, location.latitude];
 
         // 🔍 Check if location is within Maasin bounds
@@ -901,10 +1321,7 @@ const MapView = () => {
             width: 16px; 
             height: 16px; 
             border-radius: 50%;
-            background-color: ${getStatusColor(
-              location.water_status,
-              hasResults
-            )};
+            background-color: ${color};
             border: 3px solid white; 
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
             cursor: pointer;
@@ -1071,43 +1488,17 @@ const MapView = () => {
   // Error state
   if (mapStatus === "error") {
     return (
-      <div
-        style={{
-          padding: "40px",
-          textAlign: "center",
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#f9fafb",
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "white",
-            padding: "30px",
-            borderRadius: "10px",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            maxWidth: "400px",
-          }}
-        >
-          <div style={{ fontSize: "48px", marginBottom: "20px" }}>⚠️</div>
-          <h2 style={{ color: "#ef4444", marginBottom: "15px" }}>Map Error</h2>
-          <p style={{ color: "#6b7280", marginBottom: "20px" }}>
+      <div className="map-error-container">
+        <div className="map-error-card">
+          <div className="map-error-icon">⚠️</div>
+          <h2 className="map-error-title">Map Error</h2>
+          <p className="map-error-message">
             Unable to load the Maasin water monitoring map. Please check your
             connection and try again.
           </p>
           <button
             onClick={() => window.location.reload()}
-            style={{
-              backgroundColor: "#3b82f6",
-              color: "white",
-              border: "none",
-              padding: "10px 20px",
-              borderRadius: "5px",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
+            className="map-error-button"
           >
             Retry
           </button>
@@ -1117,8 +1508,9 @@ const MapView = () => {
   }
 
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      {/* <div className="modern-header">
+    <div className="map-wrapper">
+      {/* Modern Header */}
+      <header className="map-header">
         <div className="header-content">
           <div className="header-left">
             <button
@@ -1128,70 +1520,145 @@ const MapView = () => {
               ←
             </button>
             <div className="header-title">
-              <h1>Water Quality Monitoring - Maasin City</h1>
+              <h1>Maasin Water Quality Monitor</h1>
               <p>Southern Leyte, Philippines</p>
             </div>
           </div>
           <div className="header-stats">
-            <div className="stats-item">
-              <span className="stats-value">{locations.length}</span>
-              <span className="stats-label">Total Locations</span>
+            <div className="stat-badge">
+              <span className="stat-value">{locations.length}</span>
+              <span className="stat-label">Total Locations</span>
             </div>
+            <button
+              className={`view-toggle-btn ${
+                viewMode === "markers" ? "active" : ""
+              }`}
+              onClick={toggleViewMode}
+              disabled={heatmapLoading}
+            >
+              {heatmapLoading ? (
+                <span className="loading-spinner-small"></span>
+              ) : viewMode === "markers" ? (
+                <>
+                  <span>Show Risk Heatmap</span>
+                </>
+              ) : (
+                <>
+                  <span>Show Water Sources</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
-      </div> */}
+      </header>
 
-      <div className="view-toggle-container">
-        <button
-          className={`view-toggle-btn ${
-            viewMode === "markers" ? "active" : ""
-          }`}
-          onClick={toggleViewMode}
-          disabled={heatmapLoading}
-        >
-          {heatmapLoading ? (
-            <span>Loading...</span>
-          ) : viewMode === "markers" ? (
-            <>Show Risk Heatmap</>
-          ) : (
-            <>Show Water Sources</>
-          )}
-        </button>
-
+      {/* Control Panel */}
+      <div className="control-panel">
         {viewMode === "heatmap" && (
-          <div className="heatmap-legend">
-            <h4>Risk Level</h4>
-            <div className="legend-items">
-              <div className="legend-item">
-                <span className="legend-color low-risk"></span>
-                <span>Low Risk</span>
+          <>
+            <div className="panel-section">
+              <h4 className="legend-title">Heatmap Controls</h4>
+              <div className="control-group">
+                <button
+                  onClick={() => adjustHeatmapIntensity(false)}
+                  className="control-btn-small"
+                  title="Decrease intensity"
+                >
+                  −
+                </button>
+                <span className="intensity-display">
+                  Intensity: {heatmapIntensity.toFixed(1)}x
+                </span>
+                <button
+                  onClick={() => adjustHeatmapIntensity(true)}
+                  className="control-btn-small"
+                  title="Increase intensity"
+                >
+                  +
+                </button>
               </div>
-              <div className="legend-item">
-                <span className="legend-color medium-risk"></span>
-                <span>Medium Risk</span>
-              </div>
-              <div className="legend-item">
-                <span className="legend-color high-risk"></span>
-                <span>High Risk</span>
+              <div className="checkbox-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={showContaminatedSources}
+                    onChange={toggleContaminatedSources}
+                  />
+                  <span className="checkbox-custom"></span>
+                  Show contaminated sources
+                </label>
               </div>
             </div>
-            <p className="legend-description">
-              Risk based on household density near contaminated water sources
-            </p>
-          </div>
+
+            <div className="panel-section">
+              <h4>Risk Level Legend</h4>
+              <div className="legend-items">
+                <div className="legend-item">
+                  <span className="legend-color high-risk"></span>
+                  <span>High Risk ({"<"}25)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-color medium-risk"></span>
+                  <span>Medium Risk (10-25)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-color low-risk"></span>
+                  <span>Low Risk ({">"}10)</span>
+                </div>
+              </div>
+              <p className="legend-description">
+                Risk score based on household density near contaminated water
+                sources
+              </p>
+            </div>
+          </>
         )}
       </div>
 
-      <div
-        ref={mapContainer}
-        style={{
-          width: "100%",
-          height: "100%",
-          backgroundColor: "#f0f0f0",
-        }}
-      />
+      {/* Water Quality Legend (visible in markers mode) */}
+      {viewMode === "markers" && (
+        <div className="quality-legend">
+          <h4 className="legend-title">Water Quality Status</h4>
+          <div className="legend-items">
+            <div className="legend-item">
+              <span
+                className="legend-color"
+                style={{ backgroundColor: "#ef4444" }}
+              ></span>
+              <span>Undrinkable (E. coli present)</span>
+            </div>
+            <div className="legend-item">
+              <span
+                className="legend-color"
+                style={{ backgroundColor: "#f97316" }}
+              ></span>
+              <span>Warning (Coliform present)</span>
+            </div>
+            <div className="legend-item">
+              <span
+                className="legend-color"
+                style={{ backgroundColor: "#10b981" }}
+              ></span>
+              <span>Safe (Both absent)</span>
+            </div>
+            <div className="legend-item">
+              <span
+                className="legend-color"
+                style={{ backgroundColor: "#9ca3af" }}
+              ></span>
+              <span>No data (Not tested)</span>
+            </div>
+          </div>
+          <p className="legend-description">
+            Click on any marker for detailed water quality information
+          </p>
+        </div>
+      )}
 
-      {/* NEW: Image Viewer Modal */}
+      {/* Map Container */}
+      <div ref={mapContainer} className="map-container" />
+
+      {/* Image Viewer Modal */}
       {imageViewer.isOpen && (
         <div
           className="image-viewer-overlay"
@@ -1199,7 +1666,6 @@ const MapView = () => {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          {/* Image Viewer Controls */}
           <div className="image-viewer-controls">
             <div className="control-group">
               <button
@@ -1245,7 +1711,6 @@ const MapView = () => {
             </div>
           </div>
 
-          {/* Image Container */}
           <div className="image-viewer-container">
             <img
               src={imageViewer.imageSrc}
@@ -1267,59 +1732,6 @@ const MapView = () => {
             />
           </div>
 
-          {mapStatus === "creating" && (
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "rgba(255,255,255,0.95)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 20,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    border: "4px solid #e5e7eb",
-                    borderTop: "4px solid #3b82f6",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                    margin: "0 auto 15px",
-                  }}
-                ></div>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#4b5563",
-                    fontSize: "16px",
-                    marginBottom: "5px",
-                  }}
-                >
-                  Loading Maasin Water Quality Map...
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#9ca3af",
-                    fontSize: "12px",
-                  }}
-                >
-                  {heatmapLoading
-                    ? "Analyzing household risk data..."
-                    : "Focusing on Maasin City, Southern Leyte"}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Image Info */}
           <div className="image-viewer-info">
             <h3>📷 {imageViewer.locationName}</h3>
             <p>
@@ -1332,52 +1744,14 @@ const MapView = () => {
 
       {/* Loading Overlay */}
       {mapStatus === "creating" && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(255,255,255,0.95)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 20,
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                border: "4px solid #e5e7eb",
-                borderTop: "4px solid #3b82f6",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-                margin: "0 auto 15px",
-              }}
-            ></div>
-            <p
-              style={{
-                margin: 0,
-                color: "#4b5563",
-                fontSize: "16px",
-                marginBottom: "5px",
-              }}
-            >
-              Loading Maasin Water Quality Map...
-            </p>
-            <p
-              style={{
-                margin: 0,
-                color: "#9ca3af",
-                fontSize: "12px",
-              }}
-            >
-              Focusing on Maasin City, Southern Leyte
-            </p>
-          </div>
+        <div className="loading-overlay">
+          <div className="loading-spinner"></div>
+          <p className="loading-text">Loading Maasin Water Quality Map...</p>
+          <p className="loading-subtext">
+            {heatmapLoading
+              ? "Analyzing household risk data..."
+              : "Focusing on Maasin City, Southern Leyte"}
+          </p>
         </div>
       )}
     </div>

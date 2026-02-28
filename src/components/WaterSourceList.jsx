@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   FaPlus,
@@ -16,11 +16,23 @@ import {
   FaCheckCircle,
   FaTimesCircle,
   FaQuestionCircle,
+  FaTimes,
+  FaDownload,
+  FaExpand,
+  FaCompress,
+  FaSort,
+  FaSortUp,
+  FaSortDown,
+  FaChevronLeft,
+  FaChevronRight,
+  FaImage,
 } from "react-icons/fa";
 import { waterLocationAPI } from "../api/api";
 import Layout from "./Layout";
+import LocationMap from "./LocationMap";
 
-// Edit Form Component
+// Enhanced Edit Form Component with better UX
+// Enhanced Edit Form Component with draggable map
 const EditForm = ({ location, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     full_name: location.full_name || "",
@@ -33,15 +45,57 @@ const EditForm = ({ location, onSave, onCancel }) => {
     sample_time: location.sample_time || "",
   });
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.full_name.trim()) {
+      newErrors.full_name = "Location name is required";
+    }
+
+    if (!formData.latitude || isNaN(formData.latitude)) {
+      newErrors.latitude = "Valid latitude is required";
+    }
+
+    if (!formData.longitude || isNaN(formData.longitude)) {
+      newErrors.longitude = "Valid longitude is required";
+    }
+
+    // Validate Maasin bounds
+    const lat = parseFloat(formData.latitude);
+    const lng = parseFloat(formData.longitude);
+
+    if (lat && (lat < 10.0 || lat > 10.3)) {
+      newErrors.latitude = "Latitude must be within Maasin City (10.0 - 10.3)";
+    }
+
+    if (lng && (lng < 124.7 || lng > 125.1)) {
+      newErrors.longitude =
+        "Longitude must be within Maasin City (124.7 - 125.1)";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const response = await waterLocationAPI.update(location.id, formData);
+      const response = await waterLocationAPI.update(location.id, {
+        ...formData,
+        latitude: parseFloat(formData.latitude),
+        longitude: parseFloat(formData.longitude),
+      });
+
       if (response.success) {
-        alert("Water source updated successfully!");
         onSave(response.data);
       }
     } catch (error) {
@@ -53,25 +107,36 @@ const EditForm = ({ location, onSave, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Name *
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Location Name */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Location Name <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             required
             value={formData.full_name}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, full_name: e.target.value }))
-            }
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            onChange={(e) => {
+              setFormData((prev) => ({ ...prev, full_name: e.target.value }));
+              if (errors.full_name) {
+                setErrors((prev) => ({ ...prev, full_name: null }));
+              }
+            }}
+            className={`w-full border ${
+              errors.full_name ? "border-red-500" : "border-gray-300"
+            } rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+            placeholder="Enter location name"
           />
+          {errors.full_name && (
+            <p className="text-sm text-red-500">{errors.full_name}</p>
+          )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+        {/* Barangay */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
             Barangay
           </label>
           <input
@@ -80,50 +145,72 @@ const EditForm = ({ location, onSave, onCancel }) => {
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, barangay: e.target.value }))
             }
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="Enter barangay"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Latitude *
+        {/* Latitude */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Latitude <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
             step="any"
             required
             value={formData.latitude}
-            onChange={(e) =>
+            onChange={(e) => {
               setFormData((prev) => ({
                 ...prev,
-                latitude: parseFloat(e.target.value),
-              }))
-            }
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                latitude: e.target.value,
+              }));
+              if (errors.latitude) {
+                setErrors((prev) => ({ ...prev, latitude: null }));
+              }
+            }}
+            className={`w-full border ${
+              errors.latitude ? "border-red-500" : "border-gray-300"
+            } rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+            placeholder="10.108537"
           />
+          {errors.latitude && (
+            <p className="text-sm text-red-500">{errors.latitude}</p>
+          )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Longitude *
+        {/* Longitude */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Longitude <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
             step="any"
             required
             value={formData.longitude}
-            onChange={(e) =>
+            onChange={(e) => {
               setFormData((prev) => ({
                 ...prev,
-                longitude: parseFloat(e.target.value),
-              }))
-            }
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                longitude: e.target.value,
+              }));
+              if (errors.longitude) {
+                setErrors((prev) => ({ ...prev, longitude: null }));
+              }
+            }}
+            className={`w-full border ${
+              errors.longitude ? "border-red-500" : "border-gray-300"
+            } rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+            placeholder="124.748792"
           />
+          {errors.longitude && (
+            <p className="text-sm text-red-500">{errors.longitude}</p>
+          )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+        {/* Sample Date */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
             Sample Date
           </label>
           <input
@@ -132,12 +219,13 @@ const EditForm = ({ location, onSave, onCancel }) => {
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, sample_date: e.target.value }))
             }
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+        {/* Sample Time */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
             Sample Time
           </label>
           <input
@@ -146,62 +234,104 @@ const EditForm = ({ location, onSave, onCancel }) => {
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, sample_time: e.target.value }))
             }
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Coliform Bacteria
-          </label>
-          <select
-            value={
-              formData.coliform_bacteria === null
-                ? "null"
-                : formData.coliform_bacteria.toString()
-            }
-            onChange={(e) => {
-              const value =
-                e.target.value === "null" ? null : e.target.value === "true";
-              setFormData((prev) => ({ ...prev, coliform_bacteria: value }));
+      {/* Map Section - Interactive and Draggable */}
+      {formData.latitude && formData.longitude && (
+        <div className="bg-gray-50 rounded-lg p-4">
+          <LocationMap
+            latitude={parseFloat(formData.latitude)}
+            longitude={parseFloat(formData.longitude)}
+            height="250px"
+            draggable={true}
+            onPositionChange={(lat, lng) => {
+              setFormData((prev) => ({
+                ...prev,
+                latitude: lat.toFixed(6),
+                longitude: lng.toFixed(6),
+              }));
+              // Clear any coordinate errors
+              if (errors.latitude || errors.longitude) {
+                setErrors((prev) => ({
+                  ...prev,
+                  latitude: null,
+                  longitude: null,
+                }));
+              }
             }}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="null">Not Tested</option>
-            <option value="false">Absent</option>
-            <option value="true">Present</option>
-          </select>
+            readOnly={false}
+          />
+          <p className="text-xs text-gray-500 mt-2 flex items-center space-x-1">
+            <span>💡</span>
+            <span>
+              Tip: You can drag the marker to adjust the location, or enter
+              coordinates manually above
+            </span>
+          </p>
         </div>
+      )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            E. coli
-          </label>
-          <select
-            value={
-              formData.e_coli === null ? "null" : formData.e_coli.toString()
-            }
-            onChange={(e) => {
-              const value =
-                e.target.value === "null" ? null : e.target.value === "true";
-              setFormData((prev) => ({ ...prev, e_coli: value }));
-            }}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="null">Not Tested</option>
-            <option value="false">Absent</option>
-            <option value="true">Present</option>
-          </select>
+      {/* Test Results Section */}
+      <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+        <h4 className="font-medium text-gray-900">Test Results</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Coliform Bacteria */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Coliform Bacteria
+            </label>
+            <select
+              value={
+                formData.coliform_bacteria === null
+                  ? "null"
+                  : formData.coliform_bacteria.toString()
+              }
+              onChange={(e) => {
+                const value =
+                  e.target.value === "null" ? null : e.target.value === "true";
+                setFormData((prev) => ({ ...prev, coliform_bacteria: value }));
+              }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            >
+              <option value="null">Not Tested</option>
+              <option value="false">Absent (Safe)</option>
+              <option value="true">Present (Unsafe)</option>
+            </select>
+          </div>
+
+          {/* E. coli */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              E. coli
+            </label>
+            <select
+              value={
+                formData.e_coli === null ? "null" : formData.e_coli.toString()
+              }
+              onChange={(e) => {
+                const value =
+                  e.target.value === "null" ? null : e.target.value === "true";
+                setFormData((prev) => ({ ...prev, e_coli: value }));
+              }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            >
+              <option value="null">Not Tested</option>
+              <option value="false">Absent (Safe)</option>
+              <option value="true">Present (Unsafe)</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-end space-x-3 pt-4">
+      {/* Form Actions */}
+      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          className="px-6 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
           disabled={saving}
         >
           Cancel
@@ -209,12 +339,438 @@ const EditForm = ({ location, onSave, onCancel }) => {
         <button
           type="submit"
           disabled={saving}
-          className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+          className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
         >
-          {saving ? "Saving..." : "Save Changes"}
+          {saving ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Saving...</span>
+            </>
+          ) : (
+            <span>Save Changes</span>
+          )}
         </button>
       </div>
     </form>
+  );
+};
+
+// View Details Modal Component
+const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
+  const [imageExpanded, setImageExpanded] = useState(false);
+
+  const getStatusInfo = (location) => {
+    const { coliform_bacteria, e_coli } = location;
+
+    if (coliform_bacteria === null && e_coli === null) {
+      return {
+        text: "NOT TESTED",
+        color: "gray",
+        icon: FaQuestionCircle,
+        description: "Water samples not collected or tested yet",
+        bgColor: "bg-gray-100",
+        textColor: "text-gray-600",
+      };
+    }
+
+    if (e_coli === true) {
+      return {
+        text: "UNDRINKABLE",
+        color: "red",
+        icon: FaTimesCircle,
+        description: "E. coli bacteria detected - highly dangerous",
+        bgColor: "bg-red-100",
+        textColor: "text-red-600",
+      };
+    }
+
+    if (coliform_bacteria === true && e_coli === true) {
+      return {
+        text: "HAZARDOUS",
+        color: "red",
+        icon: FaExclamationTriangle,
+        description: "Both bacteria detected - extremely dangerous",
+        bgColor: "bg-red-100",
+        textColor: "text-red-600",
+      };
+    }
+
+    if (coliform_bacteria === true && e_coli === false) {
+      return {
+        text: "WARNING",
+        color: "yellow",
+        icon: FaExclamationTriangle,
+        description: "Coliform bacteria detected - needs treatment",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-600",
+      };
+    }
+
+    if (coliform_bacteria === false && e_coli === false) {
+      return {
+        text: "DRINKABLE",
+        color: "green",
+        icon: FaCheckCircle,
+        description: "No harmful bacteria detected",
+        bgColor: "bg-green-100",
+        textColor: "text-green-600",
+      };
+    }
+
+    return {
+      text: "UNKNOWN",
+      color: "gray",
+      icon: FaQuestionCircle,
+      description: "Status needs evaluation",
+      bgColor: "bg-gray-100",
+      textColor: "text-gray-600",
+    };
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "Not provided";
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return "Invalid date";
+    }
+  };
+
+  const formatTime = (timeString) => {
+    if (!timeString) return "Not provided";
+    try {
+      const time = String(timeString).trim();
+      if (time.includes(":")) {
+        const [hours, minutes] = time.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour % 12 || 12;
+        return `${displayHour}:${minutes || "00"} ${ampm}`;
+      }
+      return timeString;
+    } catch {
+      return "Invalid time";
+    }
+  };
+
+  const statusInfo = getStatusInfo(location);
+  const StatusIcon = statusInfo.icon;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-cyan-600">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <FaMapMarkerAlt className="w-6 h-6 text-white" />
+              <div>
+                <h3 className="text-xl font-semibold text-white">
+                  {location.full_name}
+                </h3>
+                {location.barangay && (
+                  <p className="text-sm text-blue-100">{location.barangay}</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="cursor-pointer text-white hover:text-blue-100 transition-colors"
+            >
+              <FaTimes className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+          <div className="space-y-6">
+            {/* Status Badge */}
+            <div className={`${statusInfo.bgColor} rounded-lg p-4`}>
+              <div className="flex items-center space-x-3">
+                <StatusIcon className={`w-6 h-6 ${statusInfo.textColor}`} />
+                <div>
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.bgColor} ${statusInfo.textColor}`}
+                  >
+                    {statusInfo.text}
+                  </span>
+                  <p className={`text-sm mt-1 ${statusInfo.textColor}`}>
+                    {statusInfo.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Location Info Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Location Details */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Location Details
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Latitude:</span>
+                    <span className="font-mono">
+                      {location.latitude?.toFixed(6)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Longitude:</span>
+                    <span className="font-mono">
+                      {location.longitude?.toFixed(6)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sample Information */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Sample Information
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 text-sm">
+                    <FaCalendar className="text-gray-400" />
+                    <span className="text-gray-600">Date:</span>
+                    <span className="font-medium">
+                      {formatDate(location.sample_date)}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm">
+                    <FaClock className="text-gray-400" />
+                    <span className="text-gray-600">Time:</span>
+                    <span className="font-medium">
+                      {formatTime(location.sample_time)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Map Section */}
+            {location.latitude && location.longitude && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <LocationMap
+                  latitude={location.latitude}
+                  longitude={location.longitude}
+                  height="250px"
+                  readOnly={true}
+                />
+              </div>
+            )}
+
+            {/* Test Results */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="font-medium text-gray-900 mb-3">
+                Bacteriological Test Results
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border rounded-lg p-4 bg-white">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Coliform Bacteria</span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        location.coliform_bacteria === null
+                          ? "bg-gray-100 text-gray-600"
+                          : location.coliform_bacteria
+                          ? "bg-red-100 text-red-600"
+                          : "bg-green-100 text-green-600"
+                      }`}
+                    >
+                      {location.coliform_bacteria === null
+                        ? "Not Tested"
+                        : location.coliform_bacteria
+                        ? "Present"
+                        : "Absent"}
+                    </span>
+                  </div>
+                </div>
+                <div className="border rounded-lg p-4 bg-white">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">E. coli</span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        location.e_coli === null
+                          ? "bg-gray-100 text-gray-600"
+                          : location.e_coli
+                          ? "bg-red-100 text-red-600"
+                          : "bg-green-100 text-green-600"
+                      }`}
+                    >
+                      {location.e_coli === null
+                        ? "Not Tested"
+                        : location.e_coli
+                        ? "Present"
+                        : "Absent"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Image */}
+            {location.image_path && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Location Image
+                </h4>
+                <div
+                  className={`relative ${
+                    imageExpanded
+                      ? "fixed inset-0 z-50 bg-black bg-opacity-90"
+                      : ""
+                  }`}
+                  onClick={() => setImageExpanded(!imageExpanded)}
+                >
+                  <img
+                    src={`/${location.image_path}`}
+                    alt={location.full_name}
+                    className={`${
+                      imageExpanded
+                        ? "max-w-full max-h-full mx-auto my-auto"
+                        : "w-full h-64 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                    }`}
+                    onError={(e) => {
+                      e.target.style.display = "none";
+                    }}
+                  />
+                  {!imageExpanded && (
+                    <button
+                      onClick={() => setImageExpanded(true)}
+                      className="cursor-pointer absolute top-2 right-2 bg-black bg-opacity-50 text-white p-2 rounded-lg hover:bg-opacity-70 transition-all"
+                    >
+                      <FaExpand className="w-4 h-4" />
+                    </button>
+                  )}
+                  {imageExpanded && (
+                    <button
+                      onClick={() => setImageExpanded(false)}
+                      className="cursor-pointer absolute top-4 right-4 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-70 transition-all"
+                    >
+                      <FaCompress className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                onClose();
+                onEdit(location);
+              }}
+              className="cursor-pointer px-4 py-2 bg-yellow-500 text-white hover:bg-yellow-600 rounded-lg transition-colors flex items-center space-x-2"
+            >
+              <FaEdit className="w-4 h-4" />
+              <span>Edit</span>
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                onDelete(location);
+              }}
+              className="cursor-pointer px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded-lg transition-colors flex items-center space-x-2"
+            >
+              <FaTrash className="w-4 h-4" />
+              <span>Delete</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="cursor-pointer px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// Delete Confirmation Modal
+const DeleteConfirmationModal = ({ location, onConfirm, onCancel }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+      >
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Confirm Deletion
+          </h3>
+        </div>
+
+        <div className="px-6 py-4">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+              <FaExclamationTriangle className="w-6 h-6 text-red-600" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-900">
+                Are you sure you want to delete this water source?
+              </p>
+              <p className="text-sm text-gray-600">
+                This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="font-medium text-gray-900">{location.full_name}</p>
+            {location.barangay && (
+              <p className="text-sm text-gray-600">{location.barangay}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+          <button
+            onClick={onCancel}
+            className="cursor-pointer px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="cursor-pointer px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <FaTrash className="w-4 h-4" />
+            <span>Delete</span>
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -224,9 +780,17 @@ const WaterSourceList = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [showModal, setShowModal] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [modalType, setModalType] = useState(""); // "view", "edit", "delete"
+  const [sortConfig, setSortConfig] = useState({
+    key: "full_name",
+    direction: "asc",
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    type: "", // "view", "edit", "delete"
+    location: null,
+  });
 
   // Fetch water locations on component mount
   useEffect(() => {
@@ -256,8 +820,9 @@ const WaterSourceList = () => {
     if (coliform_bacteria === null && e_coli === null) {
       return {
         text: "NOT TESTED",
-        color: "gray-400",
-        bgColor: "gray-100",
+        color: "gray",
+        bgColor: "bg-gray-100",
+        textColor: "text-gray-600",
         icon: FaQuestionCircle,
         description: "Water samples not collected or tested yet",
       };
@@ -267,8 +832,9 @@ const WaterSourceList = () => {
     if (e_coli === true) {
       return {
         text: "UNDRINKABLE",
-        color: "red-500",
-        bgColor: "red-100",
+        color: "red",
+        bgColor: "bg-red-100",
+        textColor: "text-red-600",
         icon: FaTimesCircle,
         description: "E. coli bacteria detected - highly dangerous",
       };
@@ -278,8 +844,9 @@ const WaterSourceList = () => {
     if (coliform_bacteria === true && e_coli === true) {
       return {
         text: "HAZARDOUS",
-        color: "red-600",
-        bgColor: "red-100",
+        color: "red",
+        bgColor: "bg-red-100",
+        textColor: "text-red-600",
         icon: FaExclamationTriangle,
         description: "Both bacteria detected - extremely dangerous",
       };
@@ -289,8 +856,9 @@ const WaterSourceList = () => {
     if (coliform_bacteria === true && e_coli === false) {
       return {
         text: "WARNING",
-        color: "yellow-500",
-        bgColor: "yellow-100",
+        color: "yellow",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-600",
         icon: FaExclamationTriangle,
         description: "Coliform bacteria detected - needs treatment",
       };
@@ -300,8 +868,9 @@ const WaterSourceList = () => {
     if (coliform_bacteria === false && e_coli === false) {
       return {
         text: "DRINKABLE",
-        color: "green-500",
-        bgColor: "green-100",
+        color: "green",
+        bgColor: "bg-green-100",
+        textColor: "text-green-600",
         icon: FaCheckCircle,
         description: "No harmful bacteria detected",
       };
@@ -311,8 +880,9 @@ const WaterSourceList = () => {
     if (e_coli === false && coliform_bacteria === null) {
       return {
         text: "PARTIALLY TESTED",
-        color: "orange-500",
-        bgColor: "orange-100",
+        color: "orange",
+        bgColor: "bg-orange-100",
+        textColor: "text-orange-600",
         icon: FaQuestionCircle,
         description: "E. coli negative, coliform testing incomplete",
       };
@@ -320,8 +890,9 @@ const WaterSourceList = () => {
 
     return {
       text: "UNKNOWN",
-      color: "gray-400",
-      bgColor: "gray-100",
+      color: "gray",
+      bgColor: "bg-gray-100",
+      textColor: "text-gray-600",
       icon: FaQuestionCircle,
       description: "Status needs evaluation",
     };
@@ -359,60 +930,116 @@ const WaterSourceList = () => {
     }
   };
 
-  // Filter locations based on search and status
-  const filteredLocations = locations.filter((location) => {
-    const matchesSearch =
-      location.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (location.barangay &&
-        location.barangay.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Sorting function
+  const handleSort = (key) => {
+    setSortConfig({
+      key,
+      direction:
+        sortConfig.key === key && sortConfig.direction === "asc"
+          ? "desc"
+          : "asc",
+    });
+  };
 
-    if (filterStatus === "all") return matchesSearch;
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key)
+      return <FaSort className="w-3 h-3 text-gray-400" />;
+    return sortConfig.direction === "asc" ? (
+      <FaSortUp className="w-3 h-3 text-blue-600" />
+    ) : (
+      <FaSortDown className="w-3 h-3 text-blue-600" />
+    );
+  };
 
-    const statusInfo = getStatusInfo(location);
-    const statusMatch = statusInfo.text
-      .toLowerCase()
-      .includes(filterStatus.toLowerCase());
+  // Filter and sort locations
+  const processedLocations = locations
+    .filter((location) => {
+      const matchesSearch =
+        location.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (location.barangay &&
+          location.barangay.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesSearch && statusMatch;
-  });
+      if (filterStatus === "all") return matchesSearch;
+
+      const statusInfo = getStatusInfo(location);
+      return (
+        matchesSearch &&
+        statusInfo.text.toLowerCase().includes(filterStatus.toLowerCase())
+      );
+    })
+    .sort((a, b) => {
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+
+      if (sortConfig.key === "sample_date") {
+        aValue = a.sample_date || "";
+        bValue = b.sample_date || "";
+      } else if (sortConfig.key === "status") {
+        aValue = getStatusInfo(a).text;
+        bValue = getStatusInfo(b).text;
+      }
+
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = processedLocations.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(processedLocations.length / itemsPerPage);
 
   // Handle actions
   const handleView = (location) => {
-    setSelectedLocation(location);
-    setModalType("view");
-    setShowModal(true);
+    setModalState({
+      isOpen: true,
+      type: "view",
+      location,
+    });
   };
+
   const handleEdit = (location) => {
-    setSelectedLocation(location);
-    setModalType("edit");
-    setShowModal(true);
+    setModalState({
+      isOpen: true,
+      type: "edit",
+      location,
+    });
   };
 
   const handleDelete = (location) => {
-    setSelectedLocation(location);
-    setModalType("delete");
-    setShowModal(true);
+    setModalState({
+      isOpen: true,
+      type: "delete",
+      location,
+    });
   };
+
   const handleAdd = () => {
-    // Navigate to add location page
     navigate("/admin/add-location");
   };
+
+  const handleSaveEdit = (updatedLocation) => {
+    setLocations((prev) =>
+      prev.map((loc) => (loc.id === updatedLocation.id ? updatedLocation : loc))
+    );
+    closeModal();
+  };
+
   const confirmDelete = async () => {
     try {
       setLoading(true);
-      await waterLocationAPI.delete(selectedLocation.id);
+      const response = await waterLocationAPI.delete(modalState.location.id);
 
-      // Remove from local state
-      setLocations((prev) =>
-        prev.filter((loc) => loc.id !== selectedLocation.id)
-      );
-
-      // Close modal
-      setShowModal(false);
-      setSelectedLocation(null);
-
-      // Show success message
-      alert(`Successfully deleted ${selectedLocation.full_name}`);
+      if (response.success) {
+        setLocations((prev) =>
+          prev.filter((loc) => loc.id !== modalState.location.id)
+        );
+        closeModal();
+      }
     } catch (error) {
       console.error("❌ Error deleting location:", error);
       alert("Failed to delete water location. Please try again.");
@@ -421,7 +1048,15 @@ const WaterSourceList = () => {
     }
   };
 
-  if (loading) {
+  const closeModal = () => {
+    setModalState({
+      isOpen: false,
+      type: "",
+      location: null,
+    });
+  };
+
+  if (loading && locations.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center space-y-4">
@@ -437,18 +1072,25 @@ const WaterSourceList = () => {
       title="Water Sources Management"
       subtitle="Monitor and manage water quality monitoring locations in Maasin City"
     >
-      <div className="p-6">
-        {/* Header Section with Add Button */}
+      <div className="p-4 md:p-6">
+        {/* Header Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 flex justify-end"
+          className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0"
         >
+          <div className="flex items-center space-x-3">
+            <h2 className="text-2xl font-bold text-gray-800">Water Sources</h2>
+            <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm font-medium">
+              {locations.length} Total
+            </span>
+          </div>
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleAdd}
-            className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
+            className="cursor-pointer w-full sm:w-auto flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
           >
             <FaPlus className="w-4 h-4" />
             <span>Add New Location</span>
@@ -460,18 +1102,21 @@ const WaterSourceList = () => {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-lg shadow-sm p-6 mb-6"
+          className="bg-white rounded-xl shadow-sm p-4 mb-6"
         >
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
             {/* Search */}
-            <div className="relative flex-1 md:max-w-md">
+            <div className="relative flex-1 lg:max-w-md">
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search by name or barangay..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -480,8 +1125,11 @@ const WaterSourceList = () => {
               <FaFilter className="text-gray-400 w-4 h-4" />
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Status</option>
                 <option value="drinkable">Drinkable</option>
@@ -493,585 +1141,350 @@ const WaterSourceList = () => {
             </div>
           </div>
 
-          {/* Summary Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-6 border-t border-gray-200">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-900">
-                {locations.length}
+          {/* Summary Stats Cards - Mobile Responsive */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-4 pt-4 border-t border-gray-200">
+            {[
+              { label: "Total", value: locations.length, color: "blue" },
+              {
+                label: "Drinkable",
+                value: locations.filter(
+                  (l) => getStatusInfo(l).text === "DRINKABLE"
+                ).length,
+                color: "green",
+              },
+              {
+                label: "Warning",
+                value: locations.filter(
+                  (l) => getStatusInfo(l).text === "WARNING"
+                ).length,
+                color: "yellow",
+              },
+              {
+                label: "Contaminated",
+                value: locations.filter((l) =>
+                  ["UNDRINKABLE", "HAZARDOUS"].includes(getStatusInfo(l).text)
+                ).length,
+                color: "red",
+              },
+              {
+                label: "Untested",
+                value: locations.filter(
+                  (l) => getStatusInfo(l).text === "NOT TESTED"
+                ).length,
+                color: "gray",
+              },
+            ].map((stat, index) => (
+              <div
+                key={index}
+                className="bg-gray-50 rounded-lg p-3 text-center"
+              >
+                <div className={`text-2xl font-bold text-${stat.color}-600`}>
+                  {stat.value}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">{stat.label}</div>
               </div>
-              <div className="text-sm text-gray-600">Total Sources</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {
-                  locations.filter((l) => getStatusInfo(l).text === "DRINKABLE")
-                    .length
-                }
-              </div>
-              <div className="text-sm text-gray-600">Drinkable</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">
-                {
-                  locations.filter((l) => getStatusInfo(l).text === "WARNING")
-                    .length
-                }
-              </div>
-              <div className="text-sm text-gray-600">Warning</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">
-                {
-                  locations.filter((l) =>
-                    ["UNDRINKABLE", "HAZARDOUS"].includes(getStatusInfo(l).text)
-                  ).length
-                }
-              </div>
-              <div className="text-sm text-gray-600">Contaminated</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-600">
-                {
-                  locations.filter(
-                    (l) => getStatusInfo(l).text === "NOT TESTED"
-                  ).length
-                }
-              </div>
-              <div className="text-sm text-gray-600">Untested</div>
-            </div>
+            ))}
           </div>
         </motion.div>
 
-        {/* Table */}
+        {/* Table with Sticky Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-lg shadow-sm overflow-hidden"
+          className="bg-white rounded-xl shadow-sm overflow-hidden"
         >
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sample Info
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Test Results
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredLocations.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center space-y-3">
-                        <FaMapMarkerAlt className="w-12 h-12 text-gray-400" />
-                        <p className="text-gray-500">No water sources found</p>
-                        {searchTerm && (
-                          <p className="text-sm text-gray-400">
-                            Try adjusting your search or filter criteria
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLocations.map((location, index) => {
-                    const statusInfo = getStatusInfo(location);
-                    const StatusIcon = statusInfo.icon;
-
-                    return (
-                      <motion.tr
-                        key={location.id || index}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="hover:bg-gray-50 transition-colors duration-150"
-                      >
-                        {/* Location Info */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-start space-x-3">
-                            <FaMapMarkerAlt className="w-4 h-4 text-blue-500 mt-1 flex-shrink-0" />
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {location.full_name}
-                              </div>
-                              {location.barangay && (
-                                <div className="text-sm text-gray-500">
-                                  {location.barangay}
-                                </div>
-                              )}
-                              <div className="text-xs text-gray-400">
-                                {location.latitude?.toFixed(6)},{" "}
-                                {location.longitude?.toFixed(6)}
-                              </div>
-                            </div>
+            <div className="inline-block min-w-full align-middle">
+              <div className="overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      {[
+                        { key: "full_name", label: "Location" },
+                        { key: "status", label: "Status" },
+                        { key: "sample_date", label: "Sample Info" },
+                        { key: null, label: "Test Results" },
+                        { key: null, label: "Actions" },
+                      ].map((column, index) => (
+                        <th
+                          key={index}
+                          className={`px-4 md:px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                            column.key ? "cursor-pointer hover:bg-gray-100" : ""
+                          }`}
+                          onClick={() => column.key && handleSort(column.key)}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>{column.label}</span>
+                            {column.key && getSortIcon(column.key)}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {currentItems.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-12 text-center">
+                          <div className="flex flex-col items-center space-y-3">
+                            <FaMapMarkerAlt className="w-12 h-12 text-gray-400" />
+                            <p className="text-gray-500">
+                              No water sources found
+                            </p>
+                            {searchTerm && (
+                              <p className="text-sm text-gray-400">
+                                Try adjusting your search or filter criteria
+                              </p>
+                            )}
                           </div>
                         </td>
-
-                        {/* Status */}
-                        <td className="px-6 py-4">
-                          <div
-                            className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium`}
-                            style={{
-                              backgroundColor:
-                                statusInfo.bgColor === "gray-100"
-                                  ? "#f3f4f6"
-                                  : statusInfo.bgColor === "red-100"
-                                  ? "#fee2e2"
-                                  : statusInfo.bgColor === "yellow-100"
-                                  ? "#fef3c7"
-                                  : statusInfo.bgColor === "green-100"
-                                  ? "#dcfce7"
-                                  : statusInfo.bgColor === "orange-100"
-                                  ? "#fed7aa"
-                                  : "#f3f4f6",
-                              color:
-                                statusInfo.color === "gray-400"
-                                  ? "#9ca3af"
-                                  : statusInfo.color === "red-500"
-                                  ? "#ef4444"
-                                  : statusInfo.color === "red-600"
-                                  ? "#dc2626"
-                                  : statusInfo.color === "yellow-500"
-                                  ? "#eab308"
-                                  : statusInfo.color === "green-500"
-                                  ? "#10b981"
-                                  : statusInfo.color === "orange-500"
-                                  ? "#f97316"
-                                  : "#9ca3af",
-                            }}
-                          >
-                            <StatusIcon className="w-3 h-3" />
-                            <span>{statusInfo.text}</span>
-                          </div>
-                        </td>
-
-                        {/* Sample Info */}
-                        <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-1 text-sm">
-                              <FaCalendar className="w-3 h-3 text-gray-400" />
-                              <span>{formatDate(location.sample_date)}</span>
-                            </div>
-                            <div className="flex items-center space-x-1 text-sm">
-                              <FaClock className="w-3 h-3 text-gray-400" />
-                              <span>{formatTime(location.sample_time)}</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Test Results */}
-                        <td className="px-6 py-4">
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Coliform:</span>
-                              <span
-                                className={`font-medium ${
-                                  location.coliform_bacteria === null
-                                    ? "text-gray-400"
-                                    : location.coliform_bacteria
-                                    ? "text-red-500"
-                                    : "text-green-500"
-                                }`}
-                              >
-                                {location.coliform_bacteria === null
-                                  ? "Not tested"
-                                  : location.coliform_bacteria
-                                  ? "Present"
-                                  : "Absent"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">E. coli:</span>
-                              <span
-                                className={`font-medium ${
-                                  location.e_coli === null
-                                    ? "text-gray-400"
-                                    : location.e_coli
-                                    ? "text-red-500"
-                                    : "text-green-500"
-                                }`}
-                              >
-                                {location.e_coli === null
-                                  ? "Not tested"
-                                  : location.e_coli
-                                  ? "Present"
-                                  : "Absent"}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Actions */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleView(location)}
-                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                              title="View Details"
-                            >
-                              <FaEye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(location)}
-                              className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg transition-colors"
-                              title="Edit Location"
-                            >
-                              <FaEdit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(location)}
-                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                              title="Delete Location"
-                            >
-                              <FaTrash className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-        {/* Modal for View/Edit/Delete */}
-        {showModal && selectedLocation && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            >
-              {modalType === "view" && (
-                <div>
-                  {/* Modal Header */}
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        Water Source Details
-                      </h3>
-                      <button
-                        onClick={() => setShowModal(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                  {/* ...rest of your existing modal content... */}
-                  <div className="px-6 py-4 space-y-6">
-                    {/* Location Info */}
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        Location Information
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Name
-                          </label>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {selectedLocation.full_name}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Barangay
-                          </label>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {selectedLocation.barangay || "Not specified"}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Latitude
-                          </label>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {selectedLocation.latitude?.toFixed(6)}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Longitude
-                          </label>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {selectedLocation.longitude?.toFixed(6)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status */}
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        Water Quality Status
-                      </h4>
-                      {(() => {
-                        const statusInfo = getStatusInfo(selectedLocation);
+                      </tr>
+                    ) : (
+                      currentItems.map((location, index) => {
+                        const statusInfo = getStatusInfo(location);
                         const StatusIcon = statusInfo.icon;
-                        const bgColor =
-                          statusInfo.bgColor === "gray-100"
-                            ? "#f3f4f6"
-                            : statusInfo.bgColor === "red-100"
-                            ? "#fee2e2"
-                            : statusInfo.bgColor === "yellow-100"
-                            ? "#fef3c7"
-                            : statusInfo.bgColor === "green-100"
-                            ? "#dcfce7"
-                            : statusInfo.bgColor === "orange-100"
-                            ? "#fed7aa"
-                            : "#f3f4f6";
-                        const textColor =
-                          statusInfo.color === "gray-400"
-                            ? "#9ca3af"
-                            : statusInfo.color === "red-500"
-                            ? "#ef4444"
-                            : statusInfo.color === "red-600"
-                            ? "#dc2626"
-                            : statusInfo.color === "yellow-500"
-                            ? "#eab308"
-                            : statusInfo.color === "green-500"
-                            ? "#10b981"
-                            : statusInfo.color === "orange-500"
-                            ? "#f97316"
-                            : "#9ca3af";
 
                         return (
-                          <div
-                            className="flex items-center space-x-3 p-4 rounded-lg"
-                            style={{ backgroundColor: bgColor }}
+                          <motion.tr
+                            key={location.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
+                            onClick={() => handleView(location)}
                           >
-                            <StatusIcon
-                              className="w-6 h-6"
-                              style={{ color: textColor }}
-                            />
-                            <div>
+                            {/* Location Info */}
+                            <td className="px-4 md:px-6 py-4">
+                              <div className="flex items-start space-x-3">
+                                <FaMapMarkerAlt className="w-4 h-4 text-blue-500 mt-1 flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <div className="font-medium text-gray-900 truncate max-w-[200px]">
+                                    {location.full_name}
+                                  </div>
+                                  {location.barangay && (
+                                    <div className="text-sm text-gray-500 truncate">
+                                      {location.barangay}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-4 md:px-6 py-4">
                               <div
-                                className="font-medium"
-                                style={{ color: textColor }}
+                                className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.textColor}`}
                               >
-                                {statusInfo.text}
+                                <StatusIcon className="w-3 h-3" />
+                                <span className="hidden sm:inline">
+                                  {statusInfo.text}
+                                </span>
+                                <span className="sm:hidden">
+                                  {statusInfo.text
+                                    .split(" ")
+                                    .map((word) => word[0])
+                                    .join("")}
+                                </span>
                               </div>
-                              <div className="text-sm text-gray-600">
-                                {statusInfo.description}
+                            </td>
+
+                            {/* Sample Info */}
+                            <td className="px-4 md:px-6 py-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center space-x-1 text-sm">
+                                  <FaCalendar className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                  <span className="truncate max-w-[80px] md:max-w-none">
+                                    {formatDate(location.sample_date)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-1 text-sm">
+                                  <FaClock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                  <span className="truncate max-w-[80px] md:max-w-none">
+                                    {formatTime(location.sample_time)}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          </div>
+                            </td>
+
+                            {/* Test Results */}
+                            <td className="px-4 md:px-6 py-4">
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 hidden md:inline">
+                                    Coliform:
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      location.coliform_bacteria === null
+                                        ? "text-gray-400"
+                                        : location.coliform_bacteria
+                                        ? "text-red-500"
+                                        : "text-green-500"
+                                    }`}
+                                  >
+                                    {location.coliform_bacteria === null
+                                      ? "?"
+                                      : location.coliform_bacteria
+                                      ? "+"
+                                      : "-"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 hidden md:inline">
+                                    E. coli:
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      location.e_coli === null
+                                        ? "text-gray-400"
+                                        : location.e_coli
+                                        ? "text-red-500"
+                                        : "text-green-500"
+                                    }`}
+                                  >
+                                    {location.e_coli === null
+                                      ? "?"
+                                      : location.e_coli
+                                      ? "+"
+                                      : "-"}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="px-4 md:px-6 py-4">
+                              <div
+                                className="flex items-center space-x-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  onClick={() => handleView(location)}
+                                  className="cursor-pointer p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                  title="View Details"
+                                >
+                                  <FaEye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleEdit(location)}
+                                  className="cursor-pointer p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg transition-colors"
+                                  title="Edit Location"
+                                >
+                                  <FaEdit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(location)}
+                                  className="cursor-pointer p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                  title="Delete Location"
+                                >
+                                  <FaTrash className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </motion.tr>
                         );
-                      })()}
-                    </div>
-
-                    {/* Test Results */}
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        Test Results
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">
-                              Coliform Bacteria
-                            </span>
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-medium ${
-                                selectedLocation.coliform_bacteria === null
-                                  ? "bg-gray-100 text-gray-600"
-                                  : selectedLocation.coliform_bacteria
-                                  ? "bg-red-100 text-red-600"
-                                  : "bg-green-100 text-green-600"
-                              }`}
-                            >
-                              {selectedLocation.coliform_bacteria === null
-                                ? "Not tested"
-                                : selectedLocation.coliform_bacteria
-                                ? "Present"
-                                : "Absent"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">E. coli</span>
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-medium ${
-                                selectedLocation.e_coli === null
-                                  ? "bg-gray-100 text-gray-600"
-                                  : selectedLocation.e_coli
-                                  ? "bg-red-100 text-red-600"
-                                  : "bg-green-100 text-green-600"
-                              }`}
-                            >
-                              {selectedLocation.e_coli === null
-                                ? "Not tested"
-                                : selectedLocation.e_coli
-                                ? "Present"
-                                : "Absent"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Sample Information */}
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        Sample Information
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Sample Date
-                          </label>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {formatDate(selectedLocation.sample_date)}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Sample Time
-                          </label>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {formatTime(selectedLocation.sample_time)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Image */}
-                    {selectedLocation.image_path && (
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-3">
-                          Water Source Image
-                        </h4>
-                        <img
-                          src={`/${selectedLocation.image_path}`}
-                          alt={selectedLocation.full_name}
-                          className="w-full h-64 object-cover rounded-lg shadow-sm"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                          }}
-                        />
-                      </div>
+                      })
                     )}
-                  </div>
-                  {/* Modal Footer */}
-                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    >
-                      Close
-                    </button>
-                    <button
-                      onClick={() => handleEdit(selectedLocation)}
-                      className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-                    >
-                      Edit Location
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {modalType === "edit" && (
-                <div>
-                  {/* Edit Modal Header */}
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        Edit Water Source
-                      </h3>
-                      <button
-                        onClick={() => setShowModal(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Edit Form */}
-                  <div className="px-6 py-4">
-                    <EditForm
-                      location={selectedLocation}
-                      onSave={(updatedLocation) => {
-                        // Update the location in the list
-                        setLocations((prev) =>
-                          prev.map((loc) =>
-                            loc.id === updatedLocation.id
-                              ? updatedLocation
-                              : loc
-                          )
-                        );
-                        setShowModal(false);
-                      }}
-                      onCancel={() => setShowModal(false)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {modalType === "delete" && (
-                <div>
-                  {/* Delete Confirmation */}
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Confirm Deletion
-                    </h3>
-                  </div>
-                  <div className="px-6 py-4">
-                    <div className="flex items-center space-x-3 mb-4">
-                      <FaExclamationTriangle className="w-6 h-6 text-red-500" />
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          Are you sure you want to delete this water source?
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          This action cannot be undone.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="font-medium">
-                        {selectedLocation.full_name}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {selectedLocation.barangay}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={confirmDelete}
-                      className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-            </motion.div>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Pagination */}
+          {processedLocations.length > 0 && (
+            <div className="px-4 md:px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                <div className="text-sm text-gray-700">
+                  Showing{" "}
+                  <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
+                  <span className="font-medium">
+                    {Math.min(indexOfLastItem, processedLocations.length)}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium">
+                    {processedLocations.length}
+                  </span>{" "}
+                  results
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                    className="cursor-pointer px-3 py-1 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <FaChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="cursor-pointer px-3 py-1 bg-blue-600 text-white rounded-lg">
+                    {currentPage}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="cursor-pointer px-3 py-1 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <FaChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Modals */}
+        <AnimatePresence>
+          {modalState.isOpen && modalState.type === "view" && (
+            <ViewDetailsModal
+              location={modalState.location}
+              onClose={closeModal}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          )}
+
+          {modalState.isOpen && modalState.type === "edit" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              onClick={closeModal}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Edit Water Source
+                  </h3>
+                </div>
+                <div className="px-6 py-4">
+                  <EditForm
+                    location={modalState.location}
+                    onSave={handleSaveEdit}
+                    onCancel={closeModal}
+                  />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {modalState.isOpen && modalState.type === "delete" && (
+            <DeleteConfirmationModal
+              location={modalState.location}
+              onConfirm={confirmDelete}
+              onCancel={closeModal}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </Layout>
   );
