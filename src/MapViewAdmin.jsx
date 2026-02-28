@@ -17,8 +17,9 @@ const MapViewAdmin = () => {
   const [householdData, setHouseholdData] = useState([]);
   const [riskData, setRiskData] = useState([]);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
-  const [heatmapIntensity, setHeatmapIntensity] = useState(1.5);
+  const [heatmapIntensity, setHeatmapIntensity] = useState(0.5);
   const [showContaminatedSources, setShowContaminatedSources] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [riskStats, setRiskStats] = useState({
     totalRiskZones: 0,
     highRiskZones: 0,
@@ -173,16 +174,18 @@ const MapViewAdmin = () => {
           ["get", "risk_score"],
           0,
           0,
-          10,
-          0.5,
+          5,
+          0.3,
           25,
-          0.8,
+          0.6,
           50,
-          1.2,
+          1.0,
           100,
-          1.5,
+          1.3,
         ],
-        // Increase the heatmap color intensity based on zoom level
+
+        // ENHANCED: Dynamically adjust intensity based on zoom level
+        // Lower intensity when zoomed out, higher when zoomed in
         "heatmap-intensity": [
           "interpolate",
           ["linear"],
@@ -194,6 +197,7 @@ const MapViewAdmin = () => {
           18,
           heatmapIntensity * 1.5,
         ],
+
         // ENHANCED: More intuitive color ramp - blue (low) to red (high)
         "heatmap-color": [
           "interpolate",
@@ -201,53 +205,76 @@ const MapViewAdmin = () => {
           ["heatmap-density"],
           0,
           "rgba(0, 0, 255, 0)", // Transparent blue
-          0.2,
-          "rgba(65, 105, 225, 0.6)", // Royal blue
-          0.4,
-          "rgba(255, 255, 0, 0.7)", // Yellow
-          0.6,
+          0.1,
+          "rgba(65, 105, 225, 0.2)", // Very light blue at low density
+          0.3,
+          "rgba(65, 105, 225, 0.5)", // Light blue
+          0.5,
+          "rgba(255, 255, 0, 0.6)", // Yellow
+          0.7,
           "rgba(255, 165, 0, 0.8)", // Orange
-          0.8,
+          0.9,
           "rgba(255, 69, 0, 0.9)", // Red-orange
           1,
           "rgba(139, 0, 0, 1)", // Dark red
         ],
-        // Adjust the heatmap radius by zoom level and risk score
+
+        // ENHANCED: Adjust heatmap radius by zoom level - smaller when zoomed out
         "heatmap-radius": [
           "interpolate",
           ["linear"],
           ["zoom"],
           0,
-          15,
+          5, // Very small radius at far zoom (was 15)
+          8,
+          10, // Small at medium zoom
           12,
-          30,
+          20, // Medium at closer zoom
+          16,
+          35, // Larger at very close zoom
           18,
-          50,
+          50, // Largest at max zoom
         ],
-        // Heatmap opacity
-        "heatmap-opacity": 0.8,
+
+        // ENHANCED: Opacity also varies with zoom
+        "heatmap-opacity": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          0,
+          0.4, // More transparent when zoomed out
+          8,
+          0.6,
+          12,
+          0.7,
+          16,
+          0.8,
+          18,
+          0.9, // More opaque when zoomed in
+        ],
       },
     });
 
-    // ENHANCED: Add cluster layer for better visualization at different zoom levels
+    // UPDATED: Smaller cluster layer for mid-level zoom
     map.current.addLayer({
       id: "risk-clusters",
       type: "circle",
       source: "household-heatmap",
-      minzoom: 12,
+      minzoom: 18, // Start showing at zoom 13
+      maxzoom: 2, // Hide after zoom 15
       paint: {
         "circle-radius": [
           "interpolate",
           ["linear"],
           ["get", "risk_score"],
           0,
-          5,
+          3, // Reduced from 5
           25,
-          10,
+          6, // Reduced from 10
           50,
-          15,
+          9, // Reduced from 15
           100,
-          20,
+          12, // Reduced from 20
         ],
         "circle-color": [
           "match",
@@ -261,42 +288,40 @@ const MapViewAdmin = () => {
           "#9ca3af",
         ],
         "circle-stroke-color": "white",
-        "circle-stroke-width": 2,
-        "circle-opacity": 0.8,
+        "circle-stroke-width": 1, // Reduced from 2
+        "circle-opacity": 0.7, // Reduced from 0.8
       },
     });
 
-    // Add circle layer for high zoom levels (individual points)
+    // UPDATED: Smaller household risk points for high zoom levels
     map.current.addLayer({
       id: "household-risk-points",
       type: "circle",
       source: "household-heatmap",
-      minzoom: 15,
+      minzoom: 15, // Only show at zoom 15 and higher
       paint: {
-        // Size circle radius by household count
         "circle-radius": [
           "interpolate",
           ["linear"],
           ["get", "household_count"],
           1,
-          6,
+          3,
           10,
-          12,
+          5,
           50,
-          20,
+          8,
         ],
-        // FIXED: Color circle by contamination type - corrected expression
         "circle-color": [
           "case",
           ["==", ["get", "e_coli"], true],
-          "#ef4444", // E. coli present - red
+          "#ef4444",
           ["==", ["get", "coliform"], true],
-          "#f97316", // Coliform only - orange
-          "#3b82f6", // Other - blue
+          "#f97316",
+          "#3b82f6",
         ],
         "circle-stroke-color": "white",
-        "circle-stroke-width": 2,
-        "circle-opacity": 0.9,
+        "circle-stroke-width": 1,
+        "circle-opacity": 0.8,
       },
     });
 
@@ -337,38 +362,71 @@ const MapViewAdmin = () => {
         data: sourceData,
       });
 
-      // FIXED: Use a simple circle instead of image marker to avoid loading issues
+      // UPDATED: Contaminated sources with zoom-based visibility
       map.current.addLayer({
         id: "contaminated-sources",
         type: "circle",
         source: "contaminated-sources",
         minzoom: 10,
         paint: {
-          "circle-radius": 8,
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            3, // Tiny at zoom 10
+            12,
+            4,
+            14,
+            5,
+            16,
+            6,
+            18,
+            8, // Larger at max zoom
+          ],
           "circle-color": [
             "case",
             ["==", ["get", "e_coli"], true],
-            "#dc2626", // Red for E. coli
+            "#dc2626",
             ["==", ["get", "coliform"], true],
-            "#f97316", // Orange for coliform
-            "#9ca3af", // Gray fallback
+            "#f97316",
+            "#9ca3af",
           ],
           "circle-stroke-color": "white",
-          "circle-stroke-width": 2,
-          "circle-opacity": 0.9,
+          "circle-stroke-width": 1.5,
+          "circle-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            0.5, // More transparent at lower zoom
+            14,
+            0.7,
+            18,
+            0.9,
+          ],
         },
       });
-
-      // Add labels separately
+      // UPDATED: Labels only show at higher zoom levels
       map.current.addLayer({
         id: "contaminated-sources-labels",
         type: "symbol",
         source: "contaminated-sources",
-        minzoom: 12,
+        minzoom: 14, // Show labels at zoom 14 and higher
         layout: {
           "text-field": ["get", "name"],
-          "text-size": 10,
-          "text-offset": [0, 1.5],
+          "text-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14,
+            8,
+            16,
+            10,
+            18,
+            12,
+          ],
+          "text-offset": [0, 1.2],
           "text-anchor": "top",
           "text-optional": true,
         },
@@ -376,7 +434,17 @@ const MapViewAdmin = () => {
           "text-color": "#dc2626",
           "text-halo-color": "white",
           "text-halo-width": 2,
-          "text-opacity": 0.9,
+          "text-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14,
+            0.6,
+            16,
+            0.8,
+            18,
+            1,
+          ],
         },
       });
     }
@@ -394,74 +462,72 @@ const MapViewAdmin = () => {
         .setLngLat(coordinates)
         .setHTML(
           `
-        <div style="padding: 15px;">
-          <h3 style="margin: 0 0 12px 0; color: #1f2937; font-size: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">
-            ⚠️ Risk Assessment
-          </h3>
-          
-          <div style="margin-bottom: 12px; background: #f3f4f6; padding: 10px; border-radius: 6px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span style="color: #4b5563;">Risk Level:</span>
-              <span style="font-weight: 600; color: ${
+      <div style="padding: 15px;">
+        <h3 style="margin: 0 0 12px 0; color: #1f2937; font-size: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">
+          ⚠️ Risk Assessment
+        </h3>
+        
+        <div style="margin-bottom: 12px; background: #f3f4f6; padding: 10px; border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="color: #4b5563;">Risk Level:</span>
+            <span style="font-weight: 600; color: ${
+              properties.risk_score > 25
+                ? "#dc2626"
+                : properties.risk_score > 10
+                ? "#f97316"
+                : "#2563eb"
+            }">
+              ${
                 properties.risk_score > 25
-                  ? "#dc2626"
+                  ? "HIGH"
                   : properties.risk_score > 10
-                  ? "#f97316"
-                  : "#2563eb"
-              }">
-                ${
-                  properties.risk_score > 25
-                    ? "HIGH"
-                    : properties.risk_score > 10
-                    ? "MEDIUM"
-                    : "LOW"
-                }
-              </span>
-            </div>
-            
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-              <span style="color: #4b5563;">Risk Score:</span>
-              <span style="font-weight: 600;">${Math.round(
-                properties.risk_score
-              )}</span>
-            </div>
-            
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: #4b5563;">Households:</span>
-              <span style="font-weight: 600;">${
-                properties.household_count
-              }</span>
-            </div>
-          </div>
-
-          <div style="margin-bottom: 12px;">
-            <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">Nearby Contaminated Source:</h4>
-            <p style="margin: 0; color: #4b5563; font-size: 13px; background: #f9fafb; padding: 8px; border-radius: 4px;">
-              ${properties.water_source}
-            </p>
-          </div>
-
-          <div style="margin-bottom: 12px;">
-            <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">Contamination Type:</h4>
-            <div style="display: flex; gap: 10px;">
-              ${
-                properties.coliform
-                  ? '<span style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">Coliform</span>'
-                  : ""
+                  ? "MEDIUM"
+                  : "LOW"
               }
-              ${
-                properties.e_coli
-                  ? '<span style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">E. Coli</span>'
-                  : ""
-              }
-            </div>
+            </span>
           </div>
-
-          <div style="font-size: 11px; color: #6b7280; margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-            Click for more details • High risk areas require immediate attention
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="color: #4b5563;">Risk Score:</span>
+            <span style="font-weight: 600;">${Math.round(
+              properties.risk_score
+            )}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #4b5563;">Households:</span>
+            <span style="font-weight: 600;">${properties.household_count}</span>
           </div>
         </div>
-      `
+
+        <div style="margin-bottom: 12px;">
+          <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">Nearby Contaminated Source:</h4>
+          <p style="margin: 0; color: #4b5563; font-size: 13px; background: #f9fafb; padding: 8px; border-radius: 4px;">
+            ${properties.water_source}
+          </p>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 14px;">Contamination Type:</h4>
+          <div style="display: flex; gap: 10px;">
+            ${
+              properties.coliform
+                ? '<span style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">Coliform</span>'
+                : ""
+            }
+            ${
+              properties.e_coli
+                ? '<span style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">E. Coli</span>'
+                : ""
+            }
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: #6b7280; margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+          Click for more details • High risk areas require immediate attention
+        </div>
+      </div>
+    `
         )
         .addTo(map.current);
     });
@@ -475,13 +541,13 @@ const MapViewAdmin = () => {
         .setLngLat(coordinates)
         .setHTML(
           `
-        <div style="padding: 10px;">
-          <h4 style="margin: 0 0 5px 0;">Risk Cluster</h4>
-          <p>Risk Level: ${properties.risk_level.toUpperCase()}</p>
-          <p>Risk Score: ${Math.round(properties.risk_score)}</p>
-          <p>Zoom in to see individual points</p>
-        </div>
-      `
+      <div style="padding: 10px;">
+        <h4 style="margin: 0 0 5px 0;">Risk Cluster</h4>
+        <p>Risk Level: ${properties.risk_level.toUpperCase()}</p>
+        <p>Risk Score: ${Math.round(properties.risk_score)}</p>
+        <p>Zoom in to see individual household markers</p>
+      </div>
+    `
         )
         .addTo(map.current);
     });
@@ -981,7 +1047,7 @@ const MapViewAdmin = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/light-v11", // Lighter style for better contrast
+        style: "mapbox://styles/mapbox/streets-v12",
         center: MAASIN_CONFIG.center,
         zoom: MAASIN_CONFIG.zoom,
         maxBounds: MAASIN_CONFIG.bounds,
@@ -1039,6 +1105,7 @@ const MapViewAdmin = () => {
 
   // UPDATED: Status explanation helper
   const getStatusExplanation = (location) => {
+    // eslint-disable-next-line no-unused-vars
     const { status, description } = getWaterQualityInfo(location);
     return description;
   };
@@ -1053,6 +1120,7 @@ const MapViewAdmin = () => {
   // ENHANCED: Create popup content with clickable images
   const createPopupContent = (location) => {
     const { status, color } = getWaterQualityInfo(location);
+    // eslint-disable-next-line no-unused-vars
     const hasResults = hasTestResults(location);
 
     return `
