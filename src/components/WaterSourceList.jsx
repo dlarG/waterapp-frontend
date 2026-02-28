@@ -879,10 +879,10 @@ const WaterSourceList = () => {
     // E. coli absent but coliform not tested - Orange
     if (e_coli === false && coliform_bacteria === null) {
       return {
-        text: "PARTIALLY TESTED",
-        color: "orange",
-        bgColor: "bg-orange-100",
-        textColor: "text-orange-600",
+        text: "DRINKABLE",
+        color: "green",
+        bgColor: "bg-green-100",
+        textColor: "text-green-600",
         icon: FaQuestionCircle,
         description: "E. coli negative, coliform testing incomplete",
       };

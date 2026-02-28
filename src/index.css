@@ -1087,6 +1087,49 @@
   transition: all 0.2s ease;
 }
 
+.mapboxgl-map {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.mapboxgl-canvas-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.mapboxgl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure map controls are positioned correctly */
+.mapboxgl-control-container {
+  position: absolute !important;
+}
+
+.mapboxgl-ctrl-top-right {
+  top: 10px !important;
+  right: 10px !important;
+}
+
+.mapboxgl-ctrl-bottom-left {
+  bottom: 10px !important;
+  left: 10px !important;
+}
+
+/* Custom popup styles */
+.water-quality-popup .mapboxgl-popup-content {
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .mapboxgl-ctrl {
+    margin: 5px !important;
+  }
+}
+
 .map-error-button:hover {
   background: #2563eb;
   transform: translateY(-2px);

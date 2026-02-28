@@ -98,6 +98,7 @@ const LocationMap = ({
         mapInstanceRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update marker position when props change (for edit mode)
@@ -135,12 +136,13 @@ const LocationMap = ({
           <span>No coordinates available for this location</span>
         </p>
       ) : (
-        <p className="text-xs text-gray-500 flex items-center space-x-2">
-          <span>📍</span>
-          <span>
-            {latitude.toFixed(6)}, {longitude.toFixed(6)}
-          </span>
-        </p>
+        <></>
+        // <p className="text-xs text-gray-500 flex items-center space-x-2">
+        //   <span>📍</span>
+        //   <span>
+        //     {latitude.toFixed(6)}, {longitude.toFixed(6)}
+        //   </span>
+        // </p>
       )}
     </div>
   );

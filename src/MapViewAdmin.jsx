@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { waterLocationAPI, householdAPI } from "./api/api";
+import Layout from "./components/Layout";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 const MapViewAdmin = () => {
@@ -55,11 +56,8 @@ const MapViewAdmin = () => {
 
       if (riskResponse.success) {
         setRiskData(riskResponse.data);
-
-        // Calculate statistics
         const stats = calculateRiskStats(riskResponse.data);
         setRiskStats(stats);
-
         console.log(`✅ Loaded ${riskResponse.data.length} risk zones`);
         console.log("📊 Risk Statistics:", stats);
       } else {
@@ -896,51 +894,6 @@ const MapViewAdmin = () => {
     }));
   };
 
-  // NEW: Download image
-  const downloadImage = () => {
-    const link = document.createElement("a");
-    link.href = imageViewer.imageSrc;
-    link.download = `${imageViewer.locationName
-      .replace(/[^a-z0-9]/gi, "_")
-      .toLowerCase()}_water_source.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // NEW: Handle image dragging
-  const handleMouseDown = (e) => {
-    if (imageViewer.zoom > 1) {
-      setImageViewer((prev) => ({
-        ...prev,
-        isDragging: true,
-        dragStart: {
-          x: e.clientX - prev.position.x,
-          y: e.clientY - prev.position.y,
-        },
-      }));
-    }
-  };
-
-  const handleMouseMove = (e) => {
-    if (imageViewer.isDragging && imageViewer.zoom > 1) {
-      setImageViewer((prev) => ({
-        ...prev,
-        position: {
-          x: e.clientX - prev.dragStart.x,
-          y: e.clientY - prev.dragStart.y,
-        },
-      }));
-    }
-  };
-
-  const handleMouseUp = () => {
-    setImageViewer((prev) => ({
-      ...prev,
-      isDragging: false,
-    }));
-  };
-
   // NEW: Enhanced image display with click handler
   const getImageDisplay = (imagePath, locationName) => {
     if (!imagePath) {
@@ -1488,273 +1441,326 @@ const MapViewAdmin = () => {
   // Error state
   if (mapStatus === "error") {
     return (
-      <div className="map-error-container">
-        <div className="map-error-card">
-          <div className="map-error-icon">⚠️</div>
-          <h2 className="map-error-title">Map Error</h2>
-          <p className="map-error-message">
-            Unable to load the Maasin water monitoring map. Please check your
-            connection and try again.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="map-error-button"
-          >
-            Retry
-          </button>
+      <Layout title="Map View - Error" subtitle="Unable to load the map">
+        <div className="p-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center max-w-md mx-auto">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-xl font-semibold text-red-800 mb-2">
+              Map Error
+            </h2>
+            <p className="text-red-600 mb-6">
+              Unable to load the Maasin water monitoring map. Please check your
+              connection and try again.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="cursor-pointer px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="map-wrapper">
-      {/* Modern Header */}
-      <header className="map-header">
-        <div className="header-content">
-          <div className="header-left">
-            <button
-              onClick={() => window.history.back()}
-              className="back-button"
-            >
-              ←
-            </button>
-            <div className="header-title">
-              <h1>Maasin Water Quality Monitor</h1>
-              <p>Southern Leyte, Philippines</p>
-            </div>
+    <Layout
+      title="Map View"
+      subtitle="Interactive water quality monitoring map for Maasin City"
+    >
+      <div className="p-4 md:p-6 h-full">
+        {/* Header Section */}
+        <div className="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
+          <div className="flex items-center space-x-3">
+            <h2 className="text-2xl font-bold text-gray-800">
+              Water Quality Map
+            </h2>
+            <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm font-medium">
+              {locations.length} Locations
+            </span>
           </div>
-          <div className="header-stats">
-            <div className="stat-badge">
-              <span className="stat-value">{locations.length}</span>
-              <span className="stat-label">Total Locations</span>
-            </div>
+
+          <div className="flex items-center space-x-3">
             <button
-              className={`view-toggle-btn ${
-                viewMode === "markers" ? "active" : ""
+              className={`cursor-pointer px-6 py-2.5 rounded-lg font-medium transition-all duration-300 ${
+                viewMode === "markers"
+                  ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
               }`}
-              onClick={toggleViewMode}
+              onClick={() => viewMode !== "markers" && toggleViewMode()}
+              disabled={heatmapLoading}
+            >
+              Water Sources
+            </button>
+            <button
+              className={`cursor-pointer px-6 py-2.5 rounded-lg font-medium transition-all duration-300 flex items-center space-x-2 ${
+                viewMode === "heatmap"
+                  ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+              }`}
+              onClick={() => viewMode !== "heatmap" && toggleViewMode()}
               disabled={heatmapLoading}
             >
               {heatmapLoading ? (
-                <span className="loading-spinner-small"></span>
-              ) : viewMode === "markers" ? (
                 <>
-                  <span>Show Risk Heatmap</span>
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                  <span>Loading...</span>
                 </>
               ) : (
                 <>
-                  <span>Show Water Sources</span>
+                  <span>Risk Heatmap</span>
                 </>
               )}
             </button>
           </div>
         </div>
-      </header>
 
-      {/* Control Panel */}
-      <div className="control-panel">
-        {viewMode === "heatmap" && (
-          <>
-            <div className="panel-section">
-              <h4 className="legend-title">Heatmap Controls</h4>
-              <div className="control-group">
-                <button
-                  onClick={() => adjustHeatmapIntensity(false)}
-                  className="control-btn-small"
-                  title="Decrease intensity"
-                >
-                  −
-                </button>
-                <span className="intensity-display">
-                  Intensity: {heatmapIntensity.toFixed(1)}x
-                </span>
-                <button
-                  onClick={() => adjustHeatmapIntensity(true)}
-                  className="control-btn-small"
-                  title="Increase intensity"
-                >
-                  +
-                </button>
-              </div>
-              <div className="checkbox-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={showContaminatedSources}
-                    onChange={toggleContaminatedSources}
-                  />
-                  <span className="checkbox-custom"></span>
-                  Show contaminated sources
-                </label>
+        {/* Enhanced Map Controls Panel */}
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl shadow-sm border border-blue-100 overflow-hidden">
+            {/* Header */}
+            <div className="bg-white border-b border-blue-100 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">
+                      {viewMode === "markers"
+                        ? "Water Quality Legend"
+                        : "Risk Analysis Controls"}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      {viewMode === "markers"
+                        ? "Color-coded water source status indicators"
+                        : "Interactive heatmap visualization settings"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                    {viewMode.toUpperCase()} VIEW
+                  </div>
+                  {viewMode === "heatmap" && riskData.length > 0 && (
+                    <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                      {riskData.length} RISK ZONES
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="panel-section">
-              <h4>Risk Level Legend</h4>
-              <div className="legend-items">
-                <div className="legend-item">
-                  <span className="legend-color high-risk"></span>
-                  <span>High Risk ({"<"}25)</span>
+            {/* Controls Content */}
+            <div className="p-6">
+              {viewMode === "heatmap" ? (
+                <div className="space-y-6">
+                  {/* Intensity Control */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-semibold text-gray-800">
+                        Heat Intensity
+                      </label>
+                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
+                        {heatmapIntensity.toFixed(1)}x
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => adjustHeatmapIntensity(false)}
+                        className="cursor-pointer flex-shrink-0 w-10 h-10 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg flex items-center justify-center transition-all duration-200 shadow-md hover:shadow-lg"
+                        title="Decrease intensity"
+                      >
+                        <span className="text-lg font-bold">−</span>
+                      </button>
+
+                      <div className="flex-1 relative">
+                        <div className="bg-gradient-to-r from-gray-200 to-gray-300 rounded-full h-3 shadow-inner">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-cyan-500 h-3 rounded-full transition-all duration-300 shadow-sm"
+                            style={{
+                              width: `${(heatmapIntensity / 3) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => adjustHeatmapIntensity(true)}
+                        className="cursor-pointer flex-shrink-0 w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg flex items-center justify-center transition-all duration-200 shadow-md hover:shadow-lg"
+                        title="Increase intensity"
+                      >
+                        <span className="text-lg font-bold">+</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Risk Level Legend */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                    <h5 className="text-sm font-semibold text-gray-800 mb-4 flex items-center">
+                      Risk Level Classification
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-lg border border-red-100">
+                        <div className="w-6 h-6 bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow-md flex-shrink-0"></div>
+                        <div>
+                          <div className="text-sm font-medium text-red-800">
+                            High Risk
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg border border-orange-100">
+                        <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full shadow-md flex-shrink-0"></div>
+                        <div>
+                          <div className="text-sm font-medium text-orange-800">
+                            Medium Risk
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full shadow-md flex-shrink-0"></div>
+                        <div>
+                          <div className="text-sm font-medium text-blue-800">
+                            Low Risk
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toggle Options */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                    <h5 className="text-sm font-semibold text-gray-800 mb-4 flex items-center">
+                      Display Options
+                    </h5>
+                    <div className="flex items-center space-x-4">
+                      <label className="flex items-center space-x-3 cursor-pointer group">
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            id="showSources"
+                            checked={showContaminatedSources}
+                            onChange={toggleContaminatedSources}
+                            className="sr-only"
+                          />
+                          <div
+                            className={`w-12 h-6 rounded-full transition-colors duration-200 ${
+                              showContaminatedSources
+                                ? "bg-blue-500"
+                                : "bg-gray-300"
+                            }`}
+                          >
+                            <div
+                              className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                                showContaminatedSources
+                                  ? "translate-x-6"
+                                  : "translate-x-0.5"
+                              } mt-0.5`}
+                            ></div>
+                          </div>
+                        </div>
+                        <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
+                          Show contaminated water sources
+                        </span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <div className="legend-item">
-                  <span className="legend-color medium-risk"></span>
-                  <span>Medium Risk (10-25)</span>
+              ) : (
+                /* Water Quality Status Legend */
+                <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                  <h5 className="text-sm font-semibold text-gray-800 mb-4 flex items-center">
+                    Water Quality Status Guide
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="flex items-center space-x-3 p-4 bg-red-50 rounded-lg border border-red-100 hover:bg-red-100 transition-colors">
+                      <div className="w-6 h-6 bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow-md flex-shrink-0 ring-2 ring-red-200"></div>
+                      <div>
+                        <div className="text-sm font-medium text-red-800">
+                          Undrinkable
+                        </div>
+                        <div className="text-xs text-red-600">
+                          E. coli detected
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3 p-4 bg-orange-50 rounded-lg border border-orange-100 hover:bg-orange-100 transition-colors">
+                      <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full shadow-md flex-shrink-0 ring-2 ring-orange-200"></div>
+                      <div>
+                        <div className="text-sm font-medium text-orange-800">
+                          Warning
+                        </div>
+                        <div className="text-xs text-orange-600">
+                          Coliform present
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3 p-4 bg-green-50 rounded-lg border border-green-100 hover:bg-green-100 transition-colors">
+                      <div className="w-6 h-6 bg-gradient-to-r from-green-500 to-green-600 rounded-full shadow-md flex-shrink-0 ring-2 ring-green-200"></div>
+                      <div>
+                        <div className="text-sm font-medium text-green-800">
+                          Safe
+                        </div>
+                        <div className="text-xs text-green-600">
+                          No bacteria found
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                      <div className="w-6 h-6 bg-gradient-to-r from-gray-400 to-gray-500 rounded-full shadow-md flex-shrink-0 ring-2 ring-gray-200"></div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">
+                          No Data
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Not tested yet
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional Info */}
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="flex items-start space-x-2">
+                      <div className="text-xs text-blue-700">
+                        <strong>Tip:</strong> Click on any water source marker
+                        to view detailed test results, sample information, and
+                        contamination analysis.
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="legend-item">
-                  <span className="legend-color low-risk"></span>
-                  <span>Low Risk ({">"}10)</span>
-                </div>
-              </div>
-              <p className="legend-description">
-                Risk score based on household density near contaminated water
-                sources
-              </p>
+              )}
             </div>
-          </>
-        )}
+          </div>
+        </div>
+
+        {/* Map Container */}
+        <div className="bg-white py-10 rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div
+            ref={mapContainer}
+            className="w-full h-[600px] relative"
+            style={{ minHeight: "600px" }}
+          />
+
+          {/* Loading Overlay */}
+          {mapStatus === "creating" && (
+            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600 font-medium">
+                  Loading Maasin Water Quality Map...
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {heatmapLoading
+                    ? "Analyzing household risk data..."
+                    : "Focusing on Maasin City, Southern Leyte"}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Water Quality Legend (visible in markers mode) */}
-      {viewMode === "markers" && (
-        <div className="quality-legend">
-          <h4 className="legend-title">Water Quality Status</h4>
-          <div className="legend-items">
-            <div className="legend-item">
-              <span
-                className="legend-color"
-                style={{ backgroundColor: "#ef4444" }}
-              ></span>
-              <span>Undrinkable (E. coli present)</span>
-            </div>
-            <div className="legend-item">
-              <span
-                className="legend-color"
-                style={{ backgroundColor: "#f97316" }}
-              ></span>
-              <span>Warning (Coliform present)</span>
-            </div>
-            <div className="legend-item">
-              <span
-                className="legend-color"
-                style={{ backgroundColor: "#10b981" }}
-              ></span>
-              <span>Safe (Both absent)</span>
-            </div>
-            <div className="legend-item">
-              <span
-                className="legend-color"
-                style={{ backgroundColor: "#9ca3af" }}
-              ></span>
-              <span>No data (Not tested)</span>
-            </div>
-          </div>
-          <p className="legend-description">
-            Click on any marker for detailed water quality information
-          </p>
-        </div>
-      )}
-
-      {/* Map Container */}
-      <div ref={mapContainer} className="map-container" />
-
-      {/* Image Viewer Modal */}
-      {imageViewer.isOpen && (
-        <div
-          className="image-viewer-overlay"
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        >
-          <div className="image-viewer-controls">
-            <div className="control-group">
-              <button
-                onClick={zoomOut}
-                className="control-btn"
-                title="Zoom Out (-)"
-              >
-                −
-              </button>
-              <span className="zoom-display">
-                {Math.round(imageViewer.zoom * 100)}%
-              </span>
-              <button
-                onClick={zoomIn}
-                className="control-btn"
-                title="Zoom In (+)"
-              >
-                +
-              </button>
-              <button
-                onClick={resetZoom}
-                className="control-btn"
-                title="Reset Zoom (0)"
-              >
-                ↻
-              </button>
-            </div>
-            <div className="control-group">
-              <button
-                onClick={downloadImage}
-                className="control-btn"
-                title="Download Image"
-              >
-                ↓
-              </button>
-              <button
-                onClick={closeImageViewer}
-                className="control-btn close-btn"
-                title="Close (Esc)"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          <div className="image-viewer-container">
-            <img
-              src={imageViewer.imageSrc}
-              alt={imageViewer.locationName}
-              className="viewer-image"
-              style={{
-                transform: `scale(${imageViewer.zoom}) translate(${
-                  imageViewer.position.x / imageViewer.zoom
-                }px, ${imageViewer.position.y / imageViewer.zoom}px)`,
-                cursor:
-                  imageViewer.zoom > 1
-                    ? imageViewer.isDragging
-                      ? "grabbing"
-                      : "grab"
-                    : "default",
-              }}
-              onMouseDown={handleMouseDown}
-              draggable={false}
-            />
-          </div>
-
-          <div className="image-viewer-info">
-            <h3>📷 {imageViewer.locationName}</h3>
-            <p>
-              Water Source in Maasin City • Use +/- keys or buttons to zoom •
-              Drag to pan when zoomed
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Overlay */}
-      {mapStatus === "creating" && (
-        <div className="loading-overlay">
-          <div className="loading-spinner"></div>
-          <p className="loading-text">Loading Maasin Water Quality Map...</p>
-          <p className="loading-subtext">
-            {heatmapLoading
-              ? "Analyzing household risk data..."
-              : "Focusing on Maasin City, Southern Leyte"}
-          </p>
-        </div>
-      )}
-    </div>
+    </Layout>
   );
 };
 
