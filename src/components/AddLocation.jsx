@@ -6,7 +6,7 @@ import {
   useMapEvents,
   Popup,
 } from "react-leaflet";
-import { waterLocationAPI, imageAPI } from "../api/api";
+import { waterLocationAPI, imageAPI, barangayAPI } from "../api/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import L from "leaflet";
@@ -144,44 +144,56 @@ const AddLocation = () => {
     const [swLat, swLng] = MAASIN_CONFIG.bounds[0];
     const [neLat, neLng] = MAASIN_CONFIG.bounds[1];
     return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
-  }, []);
-
+  }, []); // Load existing barangays from database
   // Load existing barangays from database
   useEffect(() => {
     const fetchBarangays = async () => {
       try {
         setLoadingBarangays(true);
-        const response = await fetch("/api/barangays/from-locations");
-        const result = await response.json();
 
-        if (result.success) {
-          setBarangayOptions(result.data || []);
+        const response = await barangayAPI.getFromLocations();
+
+        if (response.success) {
+          setBarangayOptions(response.data || []);
         } else {
-          console.error("Failed to fetch barangays:", result.error);
-          // Fallback to default options
-          setBarangayOptions([
-            "batuan",
-            "combado",
-            "hantag",
-            "malapoc-norte",
-            "malapoc-sur",
-            "matin_ao",
-            "rizal",
-            "san_isidro",
-          ]);
+          console.error("❌ Failed to fetch barangays:", response.error);
         }
       } catch (error) {
-        console.error("Error fetching barangays:", error);
+        console.error("❌ Error fetching barangays:", error);
+        console.error("Error details:", error.message);
         // Fallback to default options
         setBarangayOptions([
-          "batuan",
-          "combado",
-          "hantag",
-          "malapoc-norte",
-          "malapoc-sur",
-          "matin_ao",
-          "rizal",
-          "san_isidro",
+          "Abgao",
+          "Asuncion",
+          "Batomelong",
+          "Bato",
+          "Batuan",
+          "Combado",
+          "Hantag",
+          "Hibatang",
+          "Icot",
+          "Ismerio",
+          "Kantagnos",
+          "Katipunan",
+          "Malapoc Norte",
+          "Malapoc Sur",
+          "Mantahan",
+          "Matin-ao",
+          "Nonok Norte",
+          "Nonok Sur",
+          "Panian",
+          "Poblacion Norte",
+          "Poblacion Sur",
+          "Rizal",
+          "San Agustin",
+          "San Isidro",
+          "San Roque",
+          "Santo Niño",
+          "Sooc",
+          "Tagnote",
+          "Tagum",
+          "Tomalistis",
+          "Tugas",
         ]);
       } finally {
         setLoadingBarangays(false);
@@ -931,7 +943,7 @@ const AddLocation = () => {
                       type="button"
                       onClick={handleImageUpload}
                       disabled={isUploading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors flex items-center space-x-2"
+                      className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors flex items-center space-x-2"
                     >
                       {isUploading ? (
                         <>
@@ -996,7 +1008,7 @@ const AddLocation = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors flex items-center space-x-2"
+                  className="cursor-pointer px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors flex items-center space-x-2"
                 >
                   {isSubmitting ? (
                     <>
@@ -1077,17 +1089,6 @@ const AddLocation = () => {
           </div>
         </div>
       </div>
-
-      {/* Add custom CSS for markers */}
-      <style jsx>{`
-        .custom-marker {
-          background: none;
-          border: none;
-        }
-        .custom-marker svg {
-          filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
-        }
-      `}</style>
     </div>
   );
 };

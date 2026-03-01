@@ -42,13 +42,13 @@ const Sidebar = ({ collapsed = false, isMobile = false, onClose }) => {
     // Add your logout logic here
     navigate("/auth");
   };
+
   return (
     <aside
       className={`h-screen flex flex-col bg-white shadow-xl transition-all duration-300 ${
         collapsed ? "w-[70px]" : "w-[280px]"
       }`}
     >
-      {" "}
       {/* Logo Area with Close Button for Mobile */}
       <div
         className={`flex items-center border-b border-gray-200 ${
@@ -83,6 +83,7 @@ const Sidebar = ({ collapsed = false, isMobile = false, onClose }) => {
           </button>
         )}
       </div>
+
       {/* Navigation Menu */}
       <nav className="flex-1 overflow-y-auto py-6">
         <ul className="space-y-2 px-3">
@@ -96,7 +97,6 @@ const Sidebar = ({ collapsed = false, isMobile = false, onClose }) => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                {" "}
                 <button
                   onClick={() => handleNavigation(item.path)}
                   className={`cursor-pointer w-full flex items-center ${
@@ -119,7 +119,8 @@ const Sidebar = ({ collapsed = false, isMobile = false, onClose }) => {
             );
           })}
         </ul>
-      </nav>{" "}
+      </nav>
+
       {/* Footer */}
       <div className="p-4 border-t border-gray-200">
         <button

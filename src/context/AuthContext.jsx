@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
     if (savedAdmin) {
       try {
         const parsedAdmin = JSON.parse(savedAdmin);
-        console.log("🔍 Loaded admin from localStorage:", parsedAdmin);
+
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setAdmin(parsedAdmin);
       } catch (error) {
@@ -40,7 +40,6 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         // Store the complete admin object from response
         const adminData = response.admin;
-        console.log("✅ Admin data to store:", adminData);
 
         setAdmin(adminData);
         localStorage.setItem("admin", JSON.stringify(adminData));

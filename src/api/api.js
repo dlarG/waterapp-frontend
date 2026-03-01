@@ -39,6 +39,19 @@ export const waterLocationAPI = {
       body: JSON.stringify(locationData),
     }),
 
+  // Update water location
+  update: (id, locationData) =>
+    apiRequest(`/water-locations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(locationData),
+    }),
+
+  // Delete water location
+  delete: (id) =>
+    apiRequest(`/water-locations/${id}`, {
+      method: "DELETE",
+    }),
+
   // Get map bounds for Maasin
   getMapBounds: () => apiRequest("/map-bounds"),
 };
@@ -70,6 +83,33 @@ export const householdAPI = {
 
   // Get household risk analysis
   getRiskAnalysis: () => apiRequest("/households/risk-analysis"),
+};
+
+// Barangay API
+export const barangayAPI = {
+  // Get all barangays
+  getAll: () => apiRequest("/barangays"),
+
+  // Get unique barangays from existing water locations
+  getFromLocations: () => apiRequest("/barangays/from-locations"),
+};
+
+// Analytics API
+export const analyticsAPI = {
+  // Get overview statistics
+  getOverview: () => apiRequest("/analytics/overview"),
+
+  // Get barangay statistics
+  getBarangayStats: () => apiRequest("/analytics/barangay-stats"),
+
+  // Get water quality trends
+  getWaterQualityTrends: () => apiRequest("/analytics/water-quality-trends"),
+
+  // Get contamination heatmap data
+  getContaminationHeatmap: () => apiRequest("/analytics/contamination-heatmap"),
+
+  // Get household coverage data
+  getHouseholdCoverage: () => apiRequest("/analytics/household-coverage"),
 };
 
 // Image upload API
@@ -105,5 +145,7 @@ export default {
   healthAPI,
   adminAPI,
   householdAPI,
+  barangayAPI,
+  analyticsAPI,
   imageAPI,
 };
