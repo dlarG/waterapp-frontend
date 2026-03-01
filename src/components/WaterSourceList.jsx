@@ -331,7 +331,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
+          className="cursor-pointer px-6 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
           disabled={saving}
         >
           Cancel
@@ -339,7 +339,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
         <button
           type="submit"
           disabled={saving}
-          className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          className="cursor-pointer px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
         >
           {saving ? (
             <>

@@ -9,6 +9,7 @@ import Dashboard from "./components/Dashboard";
 import MapViewAdmin from "./MapViewAdmin";
 import AddLocation from "./components/AddLocation";
 import WaterSourceList from "./components/WaterSourceList";
+import Analytics from "./components/Analytics";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/admin/map" element={<MapViewAdmin />} />
             <Route path="/admin/add-location" element={<AddLocation />} />
             <Route path="/admin/locations" element={<WaterSourceList />} />
+            <Route path="/admin/analytics" element={<Analytics />} />
           </Routes>
         </div>
       </Router>

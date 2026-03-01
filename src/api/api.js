@@ -94,6 +94,24 @@ export const barangayAPI = {
   getFromLocations: () => apiRequest("/barangays/from-locations"),
 };
 
+// Analytics API
+export const analyticsAPI = {
+  // Get overview statistics
+  getOverview: () => apiRequest("/analytics/overview"),
+
+  // Get barangay statistics
+  getBarangayStats: () => apiRequest("/analytics/barangay-stats"),
+
+  // Get water quality trends
+  getWaterQualityTrends: () => apiRequest("/analytics/water-quality-trends"),
+
+  // Get contamination heatmap data
+  getContaminationHeatmap: () => apiRequest("/analytics/contamination-heatmap"),
+
+  // Get household coverage data
+  getHouseholdCoverage: () => apiRequest("/analytics/household-coverage"),
+};
+
 // Image upload API
 export const imageAPI = {
   // Upload image for water location
@@ -128,5 +146,6 @@ export default {
   adminAPI,
   householdAPI,
   barangayAPI,
+  analyticsAPI,
   imageAPI,
 };
