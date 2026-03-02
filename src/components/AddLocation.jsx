@@ -85,7 +85,6 @@ const ImageModal = ({ isOpen, onClose, onImageSelected, isUploading }) => {
 
   useEffect(() => {
     if (showCamera) {
-      // eslint-disable-next-line react-hooks/immutability
       startCamera();
     }
     return () => {
@@ -872,14 +871,14 @@ const AddLocation = () => {
       const response = await waterLocationAPI.create(submitData);
 
       if (response.success) {
-        alert("✅ Location added successfully!");
-        navigate("/dashboard");
+        alert("Location added successfully!");
+        navigate("/admin/locations");
       } else {
-        alert(`❌ Error: ${response.error}`);
+        alert(`Error: ${response.error}`);
       }
     } catch (error) {
-      console.error("❌ Submit error:", error);
-      alert(`❌ Error adding location: ${error.message}`);
+      console.error("Submit error:", error);
+      alert(`Error adding location: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1378,8 +1377,8 @@ const AddLocation = () => {
                 ref={mapRef}
               >
                 <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}"
+                  attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
                 />
                 <MapClickHandler />
                 <ExistingLocationsMarkers />

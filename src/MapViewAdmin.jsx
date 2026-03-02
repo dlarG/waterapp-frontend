@@ -796,6 +796,180 @@ const MapViewAdmin = () => {
     }
   };
 
+  const ImageViewerModal = () => {
+    if (!imageViewer.isOpen) return null;
+
+    const handleMouseDown = (e) => {
+      if (imageViewer.zoom > 1) {
+        setImageViewer((prev) => ({
+          ...prev,
+          isDragging: true,
+          dragStart: {
+            x: e.clientX - prev.position.x,
+            y: e.clientY - prev.position.y,
+          },
+        }));
+      }
+    };
+
+    const handleMouseMove = (e) => {
+      if (imageViewer.isDragging && imageViewer.zoom > 1) {
+        setImageViewer((prev) => ({
+          ...prev,
+          position: {
+            x: e.clientX - prev.dragStart.x,
+            y: e.clientY - prev.dragStart.y,
+          },
+        }));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setImageViewer((prev) => ({ ...prev, isDragging: false }));
+    };
+
+    return (
+      <div
+        className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center"
+        style={{ zIndex: 10000 }}
+        onClick={closeImageViewer}
+      >
+        <div className="relative max-w-[95vw] max-h-[95vh] flex flex-col">
+          {/* Header */}
+          <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 z-10 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">
+                {imageViewer.locationName}
+              </h3>
+              <p className="text-sm text-gray-300">
+                Water Source Location Image
+              </p>
+            </div>
+            <button
+              onClick={closeImageViewer}
+              className="text-white hover:text-gray-300 text-2xl leading-none p-2"
+              title="Close (Esc)"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Image Container */}
+          <div
+            className="relative overflow-hidden bg-black rounded-lg mt-16"
+            style={{
+              minWidth: "300px",
+              minHeight: "300px",
+              maxWidth: "90vw",
+              maxHeight: "80vh",
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            <img
+              src={imageViewer.imageSrc}
+              alt={imageViewer.locationName}
+              className="max-w-none"
+              style={{
+                transform: `scale(${imageViewer.zoom}) translate(${imageViewer.position.x}px, ${imageViewer.position.y}px)`,
+                cursor:
+                  imageViewer.zoom > 1
+                    ? imageViewer.isDragging
+                      ? "grabbing"
+                      : "grab"
+                    : "default",
+                transition: imageViewer.isDragging
+                  ? "none"
+                  : "transform 0.3s ease",
+                maxHeight: "80vh",
+                width: "auto",
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                e.target.src = "/placeholder-image.png";
+                e.target.alt = "Image not found";
+              }}
+            />
+          </div>
+
+          {/* Controls */}
+          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 z-10">
+            <div className="flex items-center justify-center space-x-4">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  zoomOut();
+                }}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                disabled={imageViewer.zoom <= 0.5}
+                title="Zoom Out (-)"
+              >
+                <span className="text-lg">−</span>
+                <span className="text-sm">Zoom Out</span>
+              </button>
+
+              <div className="text-sm bg-white bg-opacity-20 px-3 py-2 rounded-lg text-gray-500">
+                {Math.round(imageViewer.zoom * 100)}%
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  zoomIn();
+                }}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                disabled={imageViewer.zoom >= 5}
+                title="Zoom In (+)"
+              >
+                <span className="text-lg">+</span>
+                <span className="text-sm">Zoom In</span>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resetZoom();
+                }}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                title="Reset Zoom (0)"
+              >
+                <span className="text-sm">Reset</span>
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-300 text-center mt-2">
+              Use mouse wheel to zoom • Drag to pan when zoomed • Press Esc or
+              click outside to close
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Also add mouse wheel zoom support
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (!imageViewer.isOpen) return;
+
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.2 : 0.2;
+      const newZoom = Math.max(0.5, Math.min(5, imageViewer.zoom + delta));
+
+      setImageViewer((prev) => ({
+        ...prev,
+        zoom: newZoom,
+      }));
+    };
+
+    if (imageViewer.isOpen) {
+      document.addEventListener("wheel", handleWheel, { passive: false });
+      return () => document.removeEventListener("wheel", handleWheel);
+    }
+  }, [imageViewer.isOpen, imageViewer.zoom]);
+
   // Enhanced time formatting with better error handling
   const formatTime = (timeString) => {
     if (!timeString || timeString === null || timeString === undefined) {
@@ -1760,6 +1934,7 @@ const MapViewAdmin = () => {
           )}
         </div>
       </div>
+      <ImageViewerModal />
     </Layout>
   );
 };
