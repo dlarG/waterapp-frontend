@@ -142,6 +142,7 @@ const MapViewAdmin = () => {
           water_source: point.water_source,
           coliform: point.contamination_type?.coliform || false,
           e_coli: point.contamination_type?.e_coli || false,
+          exam_failed: point.contamination_type?.exam_failed || false, // 👈 NEW
           risk_level:
             point.risk_score > 25
               ? "high"
@@ -165,11 +166,20 @@ const MapViewAdmin = () => {
       source: "household-heatmap",
       maxzoom: 18,
       paint: {
-        // Increase the heatmap weight based on risk score with exponential scaling
+        // Increase the heatmap weight based on risk score with exam_failed bias
         "heatmap-weight": [
           "interpolate",
           ["linear"],
-          ["get", "risk_score"],
+          [
+            "*",
+            ["get", "risk_score"],
+            [
+              "case",
+              ["==", ["get", "exam_failed"], true],
+              1.3, // 30% boost for failed exam zones
+              1.0,
+            ],
+          ],
           0,
           0,
           5,
@@ -351,6 +361,7 @@ const MapViewAdmin = () => {
             name: source.name,
             coliform: source.contamination?.coliform || false,
             e_coli: source.contamination?.e_coli || false,
+            exam_failed: source.contamination?.exam_failed || false, // 👈 NEW
           },
         })),
       };
@@ -360,7 +371,7 @@ const MapViewAdmin = () => {
         data: sourceData,
       });
 
-      // UPDATED: Contaminated sources with zoom-based visibility
+      // UPDATED: Contaminated sources with exam_failed first
       map.current.addLayer({
         id: "contaminated-sources",
         type: "circle",
@@ -372,7 +383,7 @@ const MapViewAdmin = () => {
             ["linear"],
             ["zoom"],
             10,
-            3, // Tiny at zoom 10
+            3,
             12,
             4,
             14,
@@ -380,14 +391,20 @@ const MapViewAdmin = () => {
             16,
             6,
             18,
-            8, // Larger at max zoom
+            8,
           ],
           "circle-color": [
             "case",
-            ["==", ["get", "e_coli"], true],
+            // exam_failed -> RED
+            ["==", ["get", "exam_failed"], true],
             "#dc2626",
+            // else if e_coli -> dark red
+            ["==", ["get", "e_coli"], true],
+            "#b91c1c",
+            // else if coliform -> orange
             ["==", ["get", "coliform"], true],
             "#f97316",
+            // default gray
             "#9ca3af",
           ],
           "circle-stroke-color": "white",
@@ -397,7 +414,7 @@ const MapViewAdmin = () => {
             ["linear"],
             ["zoom"],
             10,
-            0.5, // More transparent at lower zoom
+            0.5,
             14,
             0.7,
             18,
@@ -405,12 +422,13 @@ const MapViewAdmin = () => {
           ],
         },
       });
-      // UPDATED: Labels only show at higher zoom levels
+
+      // labels block can stay as‑is
       map.current.addLayer({
         id: "contaminated-sources-labels",
         type: "symbol",
         source: "contaminated-sources",
-        minzoom: 14, // Show labels at zoom 14 and higher
+        minzoom: 14,
         layout: {
           "text-field": ["get", "name"],
           "text-size": [
@@ -700,56 +718,86 @@ const MapViewAdmin = () => {
   const getWaterQualityInfo = (location) => {
     const coliform = location.coliform_bacteria;
     const eColi = location.e_coli;
+    const exam = (location.bacteriological_exam || "").toLowerCase();
 
-    // Case 1: No tests conducted (both null)
-    if (coliform === null && eColi === null) {
+    // 1) Contaminated: exam failed overrides everything
+    if (exam === "failed") {
       return {
-        status: "NO DATA",
-        color: "#9ca3af", // Gray
-        description:
-          "⏳ Water samples have not been collected or tested yet. Testing is required to determine water quality status.",
-      };
-    }
-
-    // Case 2: E. coli present (regardless of coliform status)
-    if (eColi === true) {
-      return {
-        status: "UNDRINKABLE",
+        status: "CONTAMINATED",
         color: "#ef4444", // Red
         description:
-          "🚨 E. coli detected in water sample. This water is unsafe for drinking and requires treatment.",
+          "🚨 Bacteriological exam failed. This water source is considered contaminated regardless of bacteria values.",
       };
     }
 
-    // Case 3: Coliform present but E. coli absent
-    if (coliform === true && (eColi === false || eColi === null)) {
-      return {
-        status: "WARNING",
-        color: "#f97316", // Orange
-        description:
-          "⚠️ Coliform bacteria detected but E. coli is absent. Further testing is recommended to ensure water safety.",
-      };
-    }
-
-    // Case 4: Both bacteria absent (safe)
-    if (
-      (coliform === false || coliform === null) &&
-      (eColi === false || eColi === null)
-    ) {
-      // Only mark as safe if both are explicitly false or one is false and other null
-      // But if one is true, it would have been caught above
+    // 2) Safe: exam passed overrides bacteria results
+    if (exam === "passed") {
       return {
         status: "SAFE",
         color: "#10b981", // Green
         description:
-          "✅ Water quality tests indicate this source is safe for drinking. No harmful bacteria detected.",
+          "✅ Bacteriological exam passed. This water source is considered safe to drink.",
+      };
+    }
+
+    // 3) Warning: exam untested but bacteria positive (either coliform or E. coli)
+    if (exam === "untested" && (coliform === true || eColi === true)) {
+      return {
+        status: "WARNING",
+        color: "#f97316", // Orange
+        description:
+          "⚠️ Bacteria detected but the bacteriological exam is untested. Further confirmation is required.",
+      };
+    }
+
+    // 4) No data: nothing tested or all null/untested
+    if (
+      (coliform === null && eColi === null && !exam) ||
+      (coliform === null && eColi === null && exam === "untested")
+    ) {
+      return {
+        status: "NO DATA",
+        color: "#9ca3af", // Gray
+        description:
+          "⏳ No test data available yet for this water source. Please collect and test samples.",
+      };
+    }
+
+    // Fallback (for older records where only bacteria exist)
+    if (eColi === true) {
+      return {
+        status: "CONTAMINATED",
+        color: "#ef4444",
+        description:
+          "🚨 E. coli detected. This water source is contaminated and unsafe for drinking.",
+      };
+    }
+
+    if (coliform === true && (eColi === false || eColi === null)) {
+      return {
+        status: "WARNING",
+        color: "#f97316",
+        description:
+          "⚠️ Coliform bacteria detected. Further bacteriological examination is recommended.",
+      };
+    }
+
+    if (
+      (coliform === false || coliform === null) &&
+      (eColi === false || eColi === null)
+    ) {
+      return {
+        status: "SAFE",
+        color: "#10b981",
+        description:
+          "✅ No harmful bacteria detected. Water is considered safe based on available tests.",
       };
     }
 
     // Default fallback
     return {
       status: "UNKNOWN",
-      color: "#9ca3af", // Gray
+      color: "#9ca3af",
       description: "❓ Water quality status needs further evaluation.",
     };
   };

@@ -337,6 +337,7 @@ const AddLocation = () => {
     sample_date: currentDate,
     sample_time: currentTime,
     image_path: "",
+    bacteriological_exam: "",
   });
 
   // New state for existing locations
@@ -866,6 +867,8 @@ const AddLocation = () => {
         sample_date: formData.sample_date || null,
         sample_time: formData.sample_time || null,
         created_by: user?.id,
+        // use the value from the select, not the derived-or expression
+        bacteriological_exam: formData.bacteriological_exam,
       };
 
       const response = await waterLocationAPI.create(submitData);
@@ -1090,7 +1093,6 @@ const AddLocation = () => {
                 )}
               </div>
 
-              {/* Simplified Water Quality Tests */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Water Quality Tests (Optional)
@@ -1197,6 +1199,30 @@ const AddLocation = () => {
                       </div>
                     </>
                   )}
+
+                  {/* Bacteriological Examination */}
+                  <div className="border border-gray-200 rounded-lg p-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">
+                      Bacteriological Examination
+                    </h4>
+                    <select
+                      name="bacteriological_exam"
+                      value={formData.bacteriological_exam || ""}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select examination result</option>
+                      <option value="passed" className="text-green-600">
+                        Passed
+                      </option>
+                      <option value="failed" className="text-red-600">
+                        Failed
+                      </option>
+                      <option value="" className="text-gray-600">
+                        Untested
+                      </option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1204,6 +1230,8 @@ const AddLocation = () => {
                     <strong>Testing Guide:</strong>
                     <br />
                     • Use individual tests to record specific bacteria results
+                    <br />• Bacteriological examination provides overall
+                    assessment
                     <br />• Leave all unchecked if no testing has been done yet
                   </p>
                 </div>
