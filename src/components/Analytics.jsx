@@ -64,7 +64,7 @@ const Analytics = () => {
   const [selectedBarangay, setSelectedBarangay] = useState("all");
   const [chartType, setChartType] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
-
+  const [resultMode, setResultMode] = useState("quantitative");
   // Colors for charts
   const COLORS = {
     safe: "#10b981",
@@ -78,6 +78,10 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchAllData();
+  }, [timeRange, resultMode]);
+
+  useEffect(() => {
+    fetchAllData();
   }, [timeRange]);
 
   const fetchAllData = async () => {
@@ -86,74 +90,41 @@ const Analytics = () => {
     try {
       console.log("🔍 Fetching analytics data...");
 
-      // Fetch overview data
+      const params = { mode: resultMode };
+
       try {
-        const overviewResponse = await analyticsAPI.getOverview();
-        if (overviewResponse.success) {
-          setOverviewData(overviewResponse.data);
-          console.log("✅ Overview data loaded:", overviewResponse.data);
-        }
+        const overviewResponse = await analyticsAPI.getOverview(params);
+        if (overviewResponse.success) setOverviewData(overviewResponse.data);
       } catch (err) {
         console.error("❌ Overview fetch failed:", err);
       }
 
-      // Fetch barangay statistics
       try {
-        const barangayResponse = await analyticsAPI.getBarangayStats();
-        if (barangayResponse.success) {
-          setBarangayStats(barangayResponse.data);
-          console.log(
-            "✅ Barangay stats loaded:",
-            barangayResponse.data.length,
-            "barangays"
-          );
-        }
+        const barangayResponse = await analyticsAPI.getBarangayStats(params);
+        if (barangayResponse.success) setBarangayStats(barangayResponse.data);
       } catch (err) {
         console.error("❌ Barangay stats fetch failed:", err);
       }
 
-      // Fetch trends data
       try {
-        const trendsResponse = await analyticsAPI.getWaterQualityTrends();
-        if (trendsResponse.success) {
-          setTrendsData(trendsResponse.data);
-          console.log(
-            "✅ Trends data loaded:",
-            trendsResponse.data.length,
-            "data points"
-          );
-        }
+        const trendsResponse = await analyticsAPI.getWaterQualityTrends(params);
+        if (trendsResponse.success) setTrendsData(trendsResponse.data);
       } catch (err) {
         console.error("❌ Trends fetch failed:", err);
       }
 
-      // Fetch contamination data
       try {
         const contaminationResponse =
-          await analyticsAPI.getContaminationHeatmap();
-        if (contaminationResponse.success) {
+          await analyticsAPI.getContaminationHeatmap(params);
+        if (contaminationResponse.success)
           setContaminationData(contaminationResponse.data);
-          console.log(
-            "✅ Contamination data loaded:",
-            contaminationResponse.data.length,
-            "sources"
-          );
-        }
       } catch (err) {
         console.error("❌ Contamination fetch failed:", err);
       }
 
-      // Fetch household coverage data
       try {
         const coverageResponse = await analyticsAPI.getHouseholdCoverage();
-        if (coverageResponse.success) {
-          setCoverageData(coverageResponse.data);
-          console.log(
-            "✅ Coverage data loaded:",
-            coverageResponse.data.length,
-            "areas"
-          );
-        }
+        if (coverageResponse.success) setCoverageData(coverageResponse.data);
       } catch (err) {
         console.error("❌ Coverage fetch failed:", err);
       }
@@ -282,6 +253,18 @@ const Analytics = () => {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <select
+              value={resultMode}
+              onChange={(e) => setResultMode(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+              title="Switch analytics between qualitative/quantitative results"
+            >
+              <option value="qualitative">
+                Quantitative (Bacteriological Exam)
+              </option>
+              <option value="quantitative">Qualitative (Colilert)</option>
+            </select>
+
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}

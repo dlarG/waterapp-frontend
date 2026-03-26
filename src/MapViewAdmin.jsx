@@ -19,7 +19,7 @@ const MapViewAdmin = () => {
   const [riskData, setRiskData] = useState([]);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const [heatmapIntensity, setHeatmapIntensity] = useState(0.5);
-  const [showContaminatedSources, setShowContaminatedSources] = useState(true);
+  const [showContaminatedSources, setShowContaminatedSources] = useState(false);
   // eslint-disable-next-line no-unused-vars
   const [riskStats, setRiskStats] = useState({
     totalRiskZones: 0,
@@ -189,6 +189,27 @@ const MapViewAdmin = () => {
     }
   };
 
+  const getMarkerIconPath = (location) => {
+    const info = getWaterQualityInfo(location);
+    const status = String(info?.status || "").toUpperCase();
+
+    // Quantitative mode statuses: "E. COLI POSITIVE", "COLIFORM POSITIVE", "NEGATIVE", "NO DATA", ...
+    // Qualitative mode statuses: "FAILED", "PASSED", "UNTESTED"
+
+    // Treat "FAILED" and "E. COLI POSITIVE" as red
+    if (status.includes("FAILED") || status.includes("E. COLI")) {
+      return "/icon/undribnkable_nobg.png";
+    }
+
+    // Treat "PASSED" and "NEGATIVE" as green
+    if (status.includes("PASSED") || status.includes("NEGATIVE")) {
+      return "/icon/drinkable_nobg.png";
+    }
+
+    // Everything else => no sample / not tested (gray)
+    return "/icon/nosample_nobg.png";
+  };
+
   // Calculate risk statistics
   const calculateRiskStats = (data) => {
     if (!data.length)
@@ -215,6 +236,21 @@ const MapViewAdmin = () => {
       lowRiskZones: lowRisk,
       avgRiskScore: Math.round(avgScore * 10) / 10,
     };
+  };
+
+  const ensureMapImage = async (id, url) => {
+    if (!map.current) return;
+    if (map.current.hasImage(id)) return;
+
+    return new Promise((resolve, reject) => {
+      map.current.loadImage(url, (err, image) => {
+        if (err) return reject(err);
+        if (!map.current.hasImage(id)) {
+          map.current.addImage(id, image, { sdf: false });
+        }
+        resolve();
+      });
+    });
   };
 
   // ENHANCED: Add heatmap layer with multiple visualization options
@@ -277,7 +313,41 @@ const MapViewAdmin = () => {
       data: heatmapData,
     });
 
-    // ENHANCED: Main heatmap layer with better color gradient
+    // ✅ Household icon layer (houses)
+    // Uses the same points as riskData (household cluster coords)
+    ensureMapImage("household-icon", "/icon/houses2_nobg.png")
+      .then(() => {
+        // Remove if exists (in case of refresh)
+        if (map.current.getLayer("household-icons")) {
+          map.current.removeLayer("household-icons");
+        }
+
+        map.current.addLayer({
+          id: "household-icons",
+          type: "symbol",
+          source: "household-heatmap",
+          minzoom: 15,
+          layout: {
+            "icon-image": "household-icon",
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              15,
+              0.25,
+              18,
+              0.45,
+            ],
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+          },
+          paint: {
+            "icon-opacity": 0.9,
+          },
+        });
+      })
+      .catch((e) => console.error("❌ Failed to load household icon:", e));
+
     map.current.addLayer({
       id: "household-heatmap",
       type: "heatmap",
@@ -414,7 +484,7 @@ const MapViewAdmin = () => {
         ],
         "circle-stroke-color": "white",
         "circle-stroke-width": 1, // Reduced from 2
-        "circle-opacity": 0.7, // Reduced from 0.8
+        "circle-opacity": 0.0, // Reduced from 0.8
       },
     });
 
@@ -446,7 +516,7 @@ const MapViewAdmin = () => {
         ],
         "circle-stroke-color": "white",
         "circle-stroke-width": 1,
-        "circle-opacity": 0.8,
+        "circle-opacity": 0.0,
       },
     });
 
@@ -715,10 +785,10 @@ const MapViewAdmin = () => {
   const removeHeatmapLayer = () => {
     if (!map.current) return;
 
-    // Remove layers in reverse order (children before parents)
     const layersToRemove = [
-      "contaminated-sources-labels", // Remove labels first
-      "contaminated-sources", // Then remove source circles
+      "contaminated-sources-labels",
+      "contaminated-sources",
+      "household-icons", // ✅ NEW
       "household-risk-points",
       "risk-clusters",
       "risk-grid",
@@ -731,7 +801,6 @@ const MapViewAdmin = () => {
       }
     });
 
-    // Remove sources after all layers are removed
     const sourcesToRemove = ["contaminated-sources", "household-heatmap"];
     sourcesToRemove.forEach((sourceId) => {
       if (map.current.getSource(sourceId)) {
@@ -1535,131 +1604,110 @@ const MapViewAdmin = () => {
     popupsRef.current.forEach((popup) => popup.remove());
     popupsRef.current = [];
 
-    // Calculate bounds for all locations within Maasin
     const bounds = new mapboxgl.LngLatBounds();
 
     locations.forEach((location) => {
       if (location.latitude && location.longitude) {
-        const { color } = getWaterQualityInfo(location);
         const lngLat = [location.longitude, location.latitude];
 
-        // 🔍 Check if location is within Maasin bounds
         const isInMaasin =
           location.longitude >= MAASIN_CONFIG.bounds[0][0] &&
           location.longitude <= MAASIN_CONFIG.bounds[1][0] &&
           location.latitude >= MAASIN_CONFIG.bounds[0][1] &&
           location.latitude <= MAASIN_CONFIG.bounds[1][1];
 
-        // Only add markers for locations within Maasin bounds
-        if (isInMaasin) {
-          bounds.extend(lngLat);
+        if (!isInMaasin) return;
 
-          // Create marker element - SIMPLIFIED VERSION
-          const el = document.createElement("div");
-          el.className = "custom-marker";
-          el.style.cssText = `
-            width: 16px; 
-            height: 16px; 
-            border-radius: 50%;
-            background-color: ${color};
-            border: 3px solid white; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            cursor: pointer;
-            position: relative;
-            z-index: 1;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            pointer-events: auto;
-          `;
+        bounds.extend(lngLat);
 
-          // Create a container div for better positioning
-          const container = document.createElement("div");
-          container.style.cssText = `
-            position: absolute;
-            width: 28px;
-            height: 28px;
-            pointer-events: auto;
-            cursor: pointer;
-          `;
-          container.appendChild(el);
+        const iconSrc = getMarkerIconPath(location);
 
-          // Store the location data
-          el.dataset.locationId = location.id || location.full_name;
+        // ✅ Use PNG marker icon
+        const img = document.createElement("img");
+        img.className = "custom-marker-icon";
+        img.src = iconSrc;
+        img.alt = "Water source status";
+        img.style.cssText = `
+          width: 34px;
+          height: 34px;
+          object-fit: contain;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-drag: none;
+          filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+          transition: transform 0.18s ease, filter 0.18s ease;
+          pointer-events: auto;
+        `;
 
-          // Create marker using the container
-          const marker = new mapboxgl.Marker({
-            element: container,
-            anchor: "center",
+        // Container helps capture hover/click reliably
+        const container = document.createElement("div");
+        container.style.cssText = `
+          width: 34px;
+          height: 34px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: auto;
+        `;
+        container.appendChild(img);
+
+        const marker = new mapboxgl.Marker({
+          element: container,
+          anchor: "bottom", // feels more natural for pin-style icons
+        })
+          .setLngLat(lngLat)
+          .addTo(map.current);
+
+        // Hover effect
+        container.addEventListener("mouseenter", () => {
+          img.style.transform = "scale(1.12)";
+          img.style.filter = "drop-shadow(0 4px 12px rgba(0,0,0,0.45))";
+        });
+
+        container.addEventListener("mouseleave", () => {
+          img.style.transform = "scale(1)";
+          img.style.filter = "drop-shadow(0 2px 6px rgba(0,0,0,0.35))";
+        });
+
+        const openPopup = () => {
+          popupsRef.current.forEach((popup) => popup.remove());
+          popupsRef.current = [];
+
+          const popup = new mapboxgl.Popup({
+            closeButton: true,
+            closeOnClick: true,
+            maxWidth: "400px",
+            offset: 25,
+            className: "water-quality-popup",
           })
             .setLngLat(lngLat)
+            .setHTML(createPopupContent(location))
             .addTo(map.current);
 
-          // Add hover effect
-          container.addEventListener("mouseenter", () => {
-            el.style.transform = "scale(1.2)";
-            el.style.zIndex = "2";
-            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
+          popupsRef.current.push(popup);
+
+          map.current.flyTo({
+            center: lngLat,
+            zoom: Math.max(map.current.getZoom(), 16),
+            duration: 1000,
           });
 
-          container.addEventListener("mouseleave", () => {
-            el.style.transform = "scale(1)";
-            el.style.zIndex = "1";
-            el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+          popup.on("close", () => {
+            const index = popupsRef.current.indexOf(popup);
+            if (index > -1) popupsRef.current.splice(index, 1);
           });
+        };
 
-          const openPopup = () => {
-            // Remove any existing popups
-            popupsRef.current.forEach((popup) => popup.remove());
-            popupsRef.current = [];
+        container.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          openPopup();
+        });
 
-            // Create new popup with larger maxWidth for images
-            const popup = new mapboxgl.Popup({
-              closeButton: true,
-              closeOnClick: true,
-              maxWidth: "400px", // Increased for images
-              offset: 25,
-              className: "water-quality-popup",
-            })
-              .setLngLat(lngLat)
-              .setHTML(createPopupContent(location))
-              .addTo(map.current);
-
-            popupsRef.current.push(popup);
-
-            // Focus on the marker when popup opens
-            map.current.flyTo({
-              center: lngLat,
-              zoom: Math.max(map.current.getZoom(), 16),
-              duration: 1000,
-            });
-
-            // Remove popup from refs when it closes
-            popup.on("close", () => {
-              const index = popupsRef.current.indexOf(popup);
-              if (index > -1) {
-                popupsRef.current.splice(index, 1);
-              }
-            });
-          };
-
-          // Add click handler to both elements
-          container.addEventListener("click", (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            openPopup();
-          });
-
-          el.addEventListener("click", (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            openPopup();
-          });
-
-          markersRef.current.push(marker);
-        }
+        markersRef.current.push(marker);
       }
     });
 
-    // Fit map to bounds if we have multiple locations within Maasin
     if (markersRef.current.length > 1) {
       setTimeout(() => {
         if (map.current) {
@@ -1671,7 +1719,6 @@ const MapViewAdmin = () => {
         }
       }, 500);
     } else if (markersRef.current.length === 1) {
-      // Center on single marker
       const firstLocation = locations.find(
         (loc) =>
           loc.longitude >= MAASIN_CONFIG.bounds[0][0] &&
@@ -1808,9 +1855,9 @@ const MapViewAdmin = () => {
                 title="Filter markers/heatmap by result type"
               >
                 <option value="qualitative">
-                  Qualitative (Bacteriological Exam)
+                  Quantitative (Bacteriological Exam)
                 </option>
-                <option value="quantitative">Quantitative (Colilert)</option>
+                <option value="quantitative">Qualitative (Colilert)</option>
               </select>
             </div>
           </div>

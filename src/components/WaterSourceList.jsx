@@ -60,7 +60,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
         location?.bacteriological_exam || "untested"
       ).toLowerCase(),
     });
-  }, [location?.id]);
+  }, [location]);
 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -119,6 +119,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
 
       if (response.success) {
         onSave(response.data);
+        alert("Water source updated successfully!");
       }
     } catch (error) {
       console.error("❌ Error updating location:", error);

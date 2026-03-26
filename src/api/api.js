@@ -103,19 +103,22 @@ export const barangayAPI = {
 
 // Analytics API
 export const analyticsAPI = {
-  // Get overview statistics
-  getOverview: () => apiRequest("/analytics/overview"),
-
-  // Get barangay statistics
-  getBarangayStats: () => apiRequest("/analytics/barangay-stats"),
-
-  // Get water quality trends
-  getWaterQualityTrends: () => apiRequest("/analytics/water-quality-trends"),
-
-  // Get contamination heatmap data
-  getContaminationHeatmap: () => apiRequest("/analytics/contamination-heatmap"),
-
-  // Get household coverage data
+  getOverview: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/analytics/overview${qs ? `?${qs}` : ""}`);
+  },
+  getBarangayStats: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/analytics/barangay-stats${qs ? `?${qs}` : ""}`);
+  },
+  getWaterQualityTrends: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/analytics/water-quality-trends${qs ? `?${qs}` : ""}`);
+  },
+  getContaminationHeatmap: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/analytics/contamination-heatmap${qs ? `?${qs}` : ""}`);
+  },
   getHouseholdCoverage: () => apiRequest("/analytics/household-coverage"),
 };
 
