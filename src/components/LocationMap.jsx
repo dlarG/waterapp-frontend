@@ -54,10 +54,26 @@ const LocationMap = ({
         15
       );
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      }).addTo(mapInstanceRef.current);
+      // Use OpenStreetMap tiles for better performance and reliability
+      // L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      //   attribution:
+      //     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      // }).addTo(mapInstanceRef.current);
+
+      // Use Google Maps tiles for satellite view (requires API key and may have usage limits)
+      // L.tileLayer("http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}", {
+      //   attribution:
+      //     '&copy; <a href="https://www.google.com/maps">Google Maps</a> Satellite',
+      // }).addTo(mapInstanceRef.current);
+
+      // Use Esri World Imagery for satellite view (more reliable than Google Maps)
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution:
+            "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+        }
+      ).addTo(mapInstanceRef.current);
 
       // Set bounds to Maasin City
       mapInstanceRef.current.setMaxBounds(MAASIN_CONFIG.bounds);
@@ -72,15 +88,6 @@ const LocationMap = ({
         const marker = L.marker([latitude, longitude], {
           draggable: draggable,
         }).addTo(mapInstanceRef.current);
-
-        // Add popup
-        marker
-          .bindPopup(
-            draggable ? "Drag me to adjust position" : "Water source location"
-          )
-          .openPopup();
-
-        markerRef.current = marker;
 
         // Handle drag events
         if (draggable && onPositionChange) {

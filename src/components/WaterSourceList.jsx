@@ -43,7 +43,25 @@ const EditForm = ({ location, onSave, onCancel }) => {
     e_coli: location.e_coli,
     sample_date: location.sample_date || "",
     sample_time: location.sample_time || "",
+    bacteriological_exam: location.bacteriological_exam || "untested",
   });
+
+  useEffect(() => {
+    setFormData({
+      full_name: location?.full_name || "",
+      barangay: location?.barangay || "",
+      latitude: location?.latitude || "",
+      longitude: location?.longitude || "",
+      coliform_bacteria: location?.coliform_bacteria ?? null,
+      e_coli: location?.e_coli ?? null,
+      sample_date: location?.sample_date || "",
+      sample_time: location?.sample_time || "",
+      bacteriological_exam: (
+        location?.bacteriological_exam || "untested"
+      ).toLowerCase(),
+    });
+  }, [location]);
+
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -81,22 +99,27 @@ const EditForm = ({ location, onSave, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setSaving(true);
 
     try {
-      const response = await waterLocationAPI.update(location.id, {
+      const payload = {
         ...formData,
         latitude: parseFloat(formData.latitude),
         longitude: parseFloat(formData.longitude),
-      });
+        bacteriological_exam: (
+          formData.bacteriological_exam || "untested"
+        ).toLowerCase(),
+      };
+
+      console.log("🟦 UPDATE payload (client):", payload); // ✅ debug
+
+      const response = await waterLocationAPI.update(location.id, payload);
 
       if (response.success) {
         onSave(response.data);
+        alert("Water source updated successfully!");
       }
     } catch (error) {
       console.error("❌ Error updating location:", error);
@@ -245,7 +268,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
           <LocationMap
             latitude={parseFloat(formData.latitude)}
             longitude={parseFloat(formData.longitude)}
-            height="250px"
+            height="350px"
             draggable={true}
             onPositionChange={(lat, lng) => {
               setFormData((prev) => ({
@@ -277,7 +300,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
       {/* Test Results Section */}
       <div className="bg-gray-50 rounded-lg p-6 space-y-4">
         <h4 className="font-medium text-gray-900">Test Results</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Coliform Bacteria */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
@@ -287,7 +310,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
               value={
                 formData.coliform_bacteria === null
                   ? "null"
-                  : formData.coliform_bacteria.toString()
+                  : formData.coliform_bacteria?.toString()
               }
               onChange={(e) => {
                 const value =
@@ -309,7 +332,7 @@ const EditForm = ({ location, onSave, onCancel }) => {
             </label>
             <select
               value={
-                formData.e_coli === null ? "null" : formData.e_coli.toString()
+                formData.e_coli === null ? "null" : formData.e_coli?.toString()
               }
               onChange={(e) => {
                 const value =
@@ -321,6 +344,27 @@ const EditForm = ({ location, onSave, onCancel }) => {
               <option value="null">Not Tested</option>
               <option value="false">Absent (Safe)</option>
               <option value="true">Present (Unsafe)</option>
+            </select>
+          </div>
+
+          {/* Bacteriological Exam */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Bacteriological Exam
+            </label>
+            <select
+              value={formData.bacteriological_exam || "untested"}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  bacteriological_exam: e.target.value,
+                }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            >
+              <option value="untested">Untested</option>
+              <option value="failed">Failed</option>
+              <option value="passed">Passed</option>
             </select>
           </div>
         </div>
@@ -360,16 +404,58 @@ const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
   const [imageExpanded, setImageExpanded] = useState(false);
 
   const getStatusInfo = (location) => {
-    const { coliform_bacteria, e_coli } = location;
+    const { coliform_bacteria, e_coli, bacteriological_exam } = location;
+    const exam = (bacteriological_exam || "").toLowerCase();
+
+    // 1) Contaminated: exam failed overrides everything
+    if (exam === "failed") {
+      return {
+        text: "CONTAMINATED",
+        color: "red",
+        bgColor: "bg-red-100",
+        textColor: "text-red-600",
+        icon: FaTimesCircle,
+        description: "Bacteriological exam failed",
+      };
+    }
+
+    // 2) Drinkable: exam passed overrides bacteria results
+    if (exam === "passed") {
+      return {
+        text: "DRINKABLE",
+        color: "green",
+        bgColor: "bg-green-100",
+        textColor: "text-green-600",
+        icon: FaCheckCircle,
+        description: "Bacteriological exam passed",
+      };
+    }
+
+    // 3) Warning: exam untested but bacteria positive
+    if (
+      exam === "untested" &&
+      (coliform_bacteria === true || e_coli === true)
+    ) {
+      return {
+        text: "WARNING",
+        color: "yellow",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-600",
+        icon: FaExclamationTriangle,
+        description: "Bacteria detected but exam untested",
+      };
+    }
+
+    // 4) If exam untested and bacteria not positive, fall back to original bacteria logic
 
     if (coliform_bacteria === null && e_coli === null) {
       return {
         text: "NOT TESTED",
         color: "gray",
-        icon: FaQuestionCircle,
-        description: "Water samples not collected or tested yet",
         bgColor: "bg-gray-100",
         textColor: "text-gray-600",
+        icon: FaQuestionCircle,
+        description: "Water samples not collected or tested yet",
       };
     }
 
@@ -377,10 +463,10 @@ const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
       return {
         text: "UNDRINKABLE",
         color: "red",
-        icon: FaTimesCircle,
-        description: "E. coli bacteria detected - highly dangerous",
         bgColor: "bg-red-100",
         textColor: "text-red-600",
+        icon: FaTimesCircle,
+        description: "E. coli bacteria detected - highly dangerous",
       };
     }
 
@@ -388,10 +474,10 @@ const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
       return {
         text: "HAZARDOUS",
         color: "red",
-        icon: FaExclamationTriangle,
-        description: "Both bacteria detected - extremely dangerous",
         bgColor: "bg-red-100",
         textColor: "text-red-600",
+        icon: FaExclamationTriangle,
+        description: "Both bacteria detected - extremely dangerous",
       };
     }
 
@@ -399,10 +485,10 @@ const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
       return {
         text: "WARNING",
         color: "yellow",
-        icon: FaExclamationTriangle,
-        description: "Coliform bacteria detected - needs treatment",
         bgColor: "bg-yellow-100",
         textColor: "text-yellow-600",
+        icon: FaExclamationTriangle,
+        description: "Coliform bacteria detected - needs treatment",
       };
     }
 
@@ -410,20 +496,31 @@ const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
       return {
         text: "DRINKABLE",
         color: "green",
-        icon: FaCheckCircle,
-        description: "No harmful bacteria detected",
         bgColor: "bg-green-100",
         textColor: "text-green-600",
+        icon: FaCheckCircle,
+        description: "No harmful bacteria detected",
+      };
+    }
+
+    if (e_coli === false && coliform_bacteria === null && exam === "failed") {
+      return {
+        text: "PARTIALLY SAFE",
+        color: "orange",
+        bgColor: "bg-orange-100",
+        textColor: "text-orange-600",
+        icon: FaQuestionCircle,
+        description: "E. coli negative, coliform testing incomplete",
       };
     }
 
     return {
       text: "UNKNOWN",
       color: "gray",
-      icon: FaQuestionCircle,
-      description: "Status needs evaluation",
       bgColor: "bg-gray-100",
       textColor: "text-gray-600",
+      icon: FaQuestionCircle,
+      description: "Status needs evaluation",
     };
   };
 
@@ -571,7 +668,7 @@ const ViewDetailsModal = ({ location, onClose, onEdit, onDelete }) => {
                 <LocationMap
                   latitude={location.latitude}
                   longitude={location.longitude}
-                  height="250px"
+                  height="350px"
                   readOnly={true}
                 />
               </div>
@@ -814,9 +911,50 @@ const WaterSourceList = () => {
 
   // Enhanced status logic matching MapViewAdmin
   const getStatusInfo = (location) => {
-    const { coliform_bacteria, e_coli } = location;
+    const { coliform_bacteria, e_coli, bacteriological_exam } = location;
+    const exam = (bacteriological_exam || "").toLowerCase();
 
-    // Both not tested - Gray
+    // 1) Contaminated: exam failed overrides everything
+    if (exam === "failed") {
+      return {
+        text: "CONTAMINATED",
+        color: "red",
+        bgColor: "bg-red-100",
+        textColor: "text-red-600",
+        icon: FaTimesCircle,
+        description: "Bacteriological exam failed",
+      };
+    }
+
+    // 2) Drinkable: exam passed overrides bacteria results
+    if (exam === "passed") {
+      return {
+        text: "DRINKABLE",
+        color: "green",
+        bgColor: "bg-green-100",
+        textColor: "text-green-600",
+        icon: FaCheckCircle,
+        description: "Bacteriological exam passed",
+      };
+    }
+
+    // 3) Warning: exam untested but bacteria positive
+    if (
+      exam === "untested" &&
+      (coliform_bacteria === true || e_coli === true)
+    ) {
+      return {
+        text: "WARNING",
+        color: "yellow",
+        bgColor: "bg-yellow-100",
+        textColor: "text-yellow-600",
+        icon: FaExclamationTriangle,
+        description: "Bacteria detected but exam untested",
+      };
+    }
+
+    // 4) If exam untested and bacteria not positive, fall back to original bacteria logic
+
     if (coliform_bacteria === null && e_coli === null) {
       return {
         text: "NOT TESTED",
@@ -828,7 +966,6 @@ const WaterSourceList = () => {
       };
     }
 
-    // E. coli present (highest priority) - Red
     if (e_coli === true) {
       return {
         text: "UNDRINKABLE",
@@ -840,7 +977,6 @@ const WaterSourceList = () => {
       };
     }
 
-    // Both bacteria present - Red (hazardous)
     if (coliform_bacteria === true && e_coli === true) {
       return {
         text: "HAZARDOUS",
@@ -852,7 +988,6 @@ const WaterSourceList = () => {
       };
     }
 
-    // Coliform present but e_coli absent - Yellow (warning)
     if (coliform_bacteria === true && e_coli === false) {
       return {
         text: "WARNING",
@@ -864,7 +999,6 @@ const WaterSourceList = () => {
       };
     }
 
-    // Both bacteria absent - Green (safe)
     if (coliform_bacteria === false && e_coli === false) {
       return {
         text: "DRINKABLE",
@@ -876,13 +1010,12 @@ const WaterSourceList = () => {
       };
     }
 
-    // E. coli absent but coliform not tested - Orange
-    if (e_coli === false && coliform_bacteria === null) {
+    if (e_coli === false && coliform_bacteria === null && exam === "failed") {
       return {
-        text: "DRINKABLE",
-        color: "green",
-        bgColor: "bg-green-100",
-        textColor: "text-green-600",
+        text: "PARTIALLY SAFE",
+        color: "orange",
+        bgColor: "bg-orange-100",
+        textColor: "text-orange-600",
         icon: FaQuestionCircle,
         description: "E. coli negative, coliform testing incomplete",
       };
@@ -1134,7 +1267,7 @@ const WaterSourceList = () => {
                 <option value="all">All Status</option>
                 <option value="drinkable">Drinkable</option>
                 <option value="warning">Warning</option>
-                <option value="undrinkable">Undrinkable</option>
+                <option value="contaminated">Contaminated</option>
                 <option value="not tested">Not Tested</option>
                 <option value="partially">Partially Tested</option>
               </select>
@@ -1161,8 +1294,8 @@ const WaterSourceList = () => {
               },
               {
                 label: "Contaminated",
-                value: locations.filter((l) =>
-                  ["UNDRINKABLE", "HAZARDOUS"].includes(getStatusInfo(l).text)
+                value: locations.filter(
+                  (l) => getStatusInfo(l).text === "CONTAMINATED"
                 ).length,
                 color: "red",
               },
@@ -1349,6 +1482,32 @@ const WaterSourceList = () => {
                                       : "-"}
                                   </span>
                                 </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 hidden md:inline">
+                                    Bacterio Exam:
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      location.bacteriological_exam ===
+                                        "untested" ||
+                                      !location.bacteriological_exam
+                                        ? "text-gray-400"
+                                        : location.bacteriological_exam ===
+                                          "failed"
+                                        ? "text-red-500"
+                                        : "text-green-500"
+                                    }`}
+                                  >
+                                    {location.bacteriological_exam ===
+                                      "untested" ||
+                                    !location.bacteriological_exam
+                                      ? "?"
+                                      : location.bacteriological_exam ===
+                                        "failed"
+                                      ? "+"
+                                      : "-"}
+                                  </span>
+                                </div>
                               </div>
                             </td>
 
@@ -1468,6 +1627,7 @@ const WaterSourceList = () => {
                 </div>
                 <div className="px-6 py-4">
                   <EditForm
+                    key={modalState.location?.id}
                     location={modalState.location}
                     onSave={handleSaveEdit}
                     onCancel={closeModal}

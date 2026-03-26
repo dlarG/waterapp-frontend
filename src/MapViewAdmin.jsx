@@ -19,7 +19,7 @@ const MapViewAdmin = () => {
   const [riskData, setRiskData] = useState([]);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const [heatmapIntensity, setHeatmapIntensity] = useState(0.5);
-  const [showContaminatedSources, setShowContaminatedSources] = useState(true);
+  const [showContaminatedSources, setShowContaminatedSources] = useState(false);
   // eslint-disable-next-line no-unused-vars
   const [riskStats, setRiskStats] = useState({
     totalRiskZones: 0,
@@ -29,6 +29,126 @@ const MapViewAdmin = () => {
     avgRiskScore: 0,
   });
 
+  const [resultMode, setResultMode] = useState("quantitative");
+  const normalizeExam = (exam) =>
+    String(exam || "")
+      .trim()
+      .toLowerCase();
+
+  const getQuantitativeQualityInfo = (location) => {
+    const coliform = location?.coliform_bacteria ?? null;
+    const eColi = location?.e_coli ?? null;
+
+    // Both null => brown
+    if (coliform === null && eColi === null) {
+      return {
+        status: "NO DATA",
+        color: "#808080", // brown
+        description:
+          "⏳ No Colilert test results yet (Coliform and E. coli are not tested).",
+      };
+    }
+
+    // If E. coli present => red (even if both present)
+    if (eColi === true) {
+      return {
+        status: "E. COLI POSITIVE",
+        color: "#ef4444", // red
+        description:
+          "🚨 E. coli detected based on Colilert result. Unsafe for drinking.",
+      };
+    }
+
+    // Only coliform positive => orange
+    if (coliform === true && (eColi === false || eColi === null)) {
+      return {
+        status: "COLIFORM POSITIVE",
+        color: "#f97316", // orange
+        description:
+          "⚠️ Coliform detected based on Colilert result. Further testing recommended.",
+      };
+    }
+
+    // Both negative => green
+    if (coliform === false && eColi === false) {
+      return {
+        status: "NEGATIVE",
+        color: "#10b981", // green
+        description:
+          "✅ Colilert result indicates no detected bacteria (Coliform & E. coli are negative).",
+      };
+    }
+
+    // Fallback (mixed null/false states)
+    if (coliform === false && eColi === null) {
+      return {
+        status: "PARTIAL DATA",
+        color: "#92400e", // brown (treat as incomplete)
+        description:
+          "⏳ Partial Colilert data: Coliform is negative but E. coli is not tested.",
+      };
+    }
+
+    if (coliform === null && eColi === false) {
+      return {
+        color: "#10b981", // green
+        description:
+          "✅ Colilert result indicates no detected bacteria (Coliform & E. coli are negative).",
+      };
+    }
+
+    return {
+      status: "UNKNOWN",
+      color: "#6b7280",
+      description: "❓ Water quality status needs further evaluation.",
+    };
+  };
+
+  const getQualitativeQualityInfo = (location) => {
+    const exam = normalizeExam(location?.bacteriological_exam);
+
+    if (exam === "failed") {
+      return {
+        status: "FAILED",
+        color: "#ef4444", // red
+        description:
+          "🚨 Bacteriological exam failed. This water source is contaminated.",
+      };
+    }
+
+    if (exam === "passed") {
+      return {
+        status: "PASSED",
+        color: "#10b981", // green
+        description:
+          "✅ Bacteriological exam passed. This water source is safe to drink.",
+      };
+    }
+
+    // untested or null => gray
+    if (exam === "untested" || exam === "") {
+      return {
+        status: "UNTESTED",
+        color: "#9ca3af", // gray
+        description: "⏳ Bacteriological exam is untested / not recorded yet.",
+      };
+    }
+
+    // any other unexpected value
+    return {
+      status: "UNKNOWN",
+      color: "#9ca3af",
+      description: "❓ Bacteriological exam status is unknown.",
+    };
+  };
+
+  // const isContaminatedForHeatmap = (location) => {
+  //   if (resultMode === "quantitative") {
+  //     return location?.e_coli === true;
+  //   }
+  //   return normalizeExam(location?.bacteriological_exam) === "failed";
+  // };
+
   const fetchHouseholdData = async () => {
     try {
       setHeatmapLoading(true);
@@ -36,11 +156,9 @@ const MapViewAdmin = () => {
 
       const [householdsResponse, riskResponse] = await Promise.all([
         householdAPI.getAll(),
-        householdAPI.getRiskAnalysis(),
+        // ✅ pass mode: quantitative|qualitative
+        householdAPI.getRiskAnalysis({ mode: resultMode }),
       ]);
-
-      console.log("🏠 Households response:", householdsResponse);
-      console.log("🎯 Risk response:", riskResponse);
 
       if (householdsResponse.success) {
         setHouseholdData(householdsResponse.data);
@@ -71,6 +189,27 @@ const MapViewAdmin = () => {
     }
   };
 
+  const getMarkerIconPath = (location) => {
+    const info = getWaterQualityInfo(location);
+    const status = String(info?.status || "").toUpperCase();
+
+    // Quantitative mode statuses: "E. COLI POSITIVE", "COLIFORM POSITIVE", "NEGATIVE", "NO DATA", ...
+    // Qualitative mode statuses: "FAILED", "PASSED", "UNTESTED"
+
+    // Treat "FAILED" and "E. COLI POSITIVE" as red
+    if (status.includes("FAILED") || status.includes("E. COLI")) {
+      return "/icon/undribnkable_nobg.png";
+    }
+
+    // Treat "PASSED" and "NEGATIVE" as green
+    if (status.includes("PASSED") || status.includes("NEGATIVE")) {
+      return "/icon/drinkable_nobg.png";
+    }
+
+    // Everything else => no sample / not tested (gray)
+    return "/icon/nosample_nobg.png";
+  };
+
   // Calculate risk statistics
   const calculateRiskStats = (data) => {
     if (!data.length)
@@ -97,6 +236,21 @@ const MapViewAdmin = () => {
       lowRiskZones: lowRisk,
       avgRiskScore: Math.round(avgScore * 10) / 10,
     };
+  };
+
+  const ensureMapImage = async (id, url) => {
+    if (!map.current) return;
+    if (map.current.hasImage(id)) return;
+
+    return new Promise((resolve, reject) => {
+      map.current.loadImage(url, (err, image) => {
+        if (err) return reject(err);
+        if (!map.current.hasImage(id)) {
+          map.current.addImage(id, image, { sdf: false });
+        }
+        resolve();
+      });
+    });
   };
 
   // ENHANCED: Add heatmap layer with multiple visualization options
@@ -142,6 +296,7 @@ const MapViewAdmin = () => {
           water_source: point.water_source,
           coliform: point.contamination_type?.coliform || false,
           e_coli: point.contamination_type?.e_coli || false,
+          exam_failed: point.contamination_type?.exam_failed || false, // 👈 NEW
           risk_level:
             point.risk_score > 25
               ? "high"
@@ -158,18 +313,60 @@ const MapViewAdmin = () => {
       data: heatmapData,
     });
 
-    // ENHANCED: Main heatmap layer with better color gradient
+    // ✅ Household icon layer (houses)
+    // Uses the same points as riskData (household cluster coords)
+    ensureMapImage("household-icon", "/icon/houses2_nobg.png")
+      .then(() => {
+        // Remove if exists (in case of refresh)
+        if (map.current.getLayer("household-icons")) {
+          map.current.removeLayer("household-icons");
+        }
+
+        map.current.addLayer({
+          id: "household-icons",
+          type: "symbol",
+          source: "household-heatmap",
+          minzoom: 15,
+          layout: {
+            "icon-image": "household-icon",
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              15,
+              0.25,
+              18,
+              0.45,
+            ],
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+          },
+          paint: {
+            "icon-opacity": 0.9,
+          },
+        });
+      })
+      .catch((e) => console.error("❌ Failed to load household icon:", e));
+
     map.current.addLayer({
       id: "household-heatmap",
       type: "heatmap",
       source: "household-heatmap",
       maxzoom: 18,
       paint: {
-        // Increase the heatmap weight based on risk score with exponential scaling
         "heatmap-weight": [
           "interpolate",
           ["linear"],
-          ["get", "risk_score"],
+          [
+            "*",
+            ["get", "risk_score"],
+            [
+              "case",
+              ["==", ["literal", resultMode], "quantitative"],
+              ["case", ["==", ["get", "e_coli"], true], 1.3, 1.0],
+              ["case", ["==", ["get", "exam_failed"], true], 1.3, 1.0],
+            ],
+          ],
           0,
           0,
           5,
@@ -287,7 +484,7 @@ const MapViewAdmin = () => {
         ],
         "circle-stroke-color": "white",
         "circle-stroke-width": 1, // Reduced from 2
-        "circle-opacity": 0.7, // Reduced from 0.8
+        "circle-opacity": 0.0, // Reduced from 0.8
       },
     });
 
@@ -319,13 +516,12 @@ const MapViewAdmin = () => {
         ],
         "circle-stroke-color": "white",
         "circle-stroke-width": 1,
-        "circle-opacity": 0.8,
+        "circle-opacity": 0.0,
       },
     });
 
     // Add contaminated water sources as markers if enabled
     if (showContaminatedSources) {
-      // Get unique contaminated water sources
       const contaminatedSources = [
         ...new Map(
           riskData.map((item) => [
@@ -333,7 +529,11 @@ const MapViewAdmin = () => {
             {
               name: item.water_source,
               contamination: item.contamination_type,
-              coordinates: [item.longitude, item.latitude],
+              // prefer water coords if present (from backend fix)
+              coordinates: [
+                item.water_longitude ?? item.longitude,
+                item.water_latitude ?? item.latitude,
+              ],
             },
           ])
         ).values(),
@@ -341,18 +541,26 @@ const MapViewAdmin = () => {
 
       const sourceData = {
         type: "FeatureCollection",
-        features: contaminatedSources.map((source) => ({
-          type: "Feature",
-          geometry: {
-            type: "Point",
-            coordinates: source.coordinates,
-          },
-          properties: {
-            name: source.name,
-            coliform: source.contamination?.coliform || false,
-            e_coli: source.contamination?.e_coli || false,
-          },
-        })),
+        features: contaminatedSources
+          .filter(
+            (s) =>
+              Array.isArray(s.coordinates) &&
+              typeof s.coordinates[0] === "number" &&
+              typeof s.coordinates[1] === "number"
+          )
+          .map((source) => ({
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: source.coordinates,
+            },
+            properties: {
+              name: source.name,
+              coliform: source.contamination?.coliform || false,
+              e_coli: source.contamination?.e_coli || false,
+              exam_failed: source.contamination?.exam_failed || false,
+            },
+          })),
       };
 
       map.current.addSource("contaminated-sources", {
@@ -360,7 +568,7 @@ const MapViewAdmin = () => {
         data: sourceData,
       });
 
-      // UPDATED: Contaminated sources with zoom-based visibility
+      // UPDATED: Contaminated sources with exam_failed first
       map.current.addLayer({
         id: "contaminated-sources",
         type: "circle",
@@ -372,7 +580,7 @@ const MapViewAdmin = () => {
             ["linear"],
             ["zoom"],
             10,
-            3, // Tiny at zoom 10
+            3,
             12,
             4,
             14,
@@ -380,14 +588,20 @@ const MapViewAdmin = () => {
             16,
             6,
             18,
-            8, // Larger at max zoom
+            8,
           ],
           "circle-color": [
             "case",
-            ["==", ["get", "e_coli"], true],
+            // exam_failed -> RED
+            ["==", ["get", "exam_failed"], true],
             "#dc2626",
+            // else if e_coli -> dark red
+            ["==", ["get", "e_coli"], true],
+            "#b91c1c",
+            // else if coliform -> orange
             ["==", ["get", "coliform"], true],
             "#f97316",
+            // default gray
             "#9ca3af",
           ],
           "circle-stroke-color": "white",
@@ -397,7 +611,7 @@ const MapViewAdmin = () => {
             ["linear"],
             ["zoom"],
             10,
-            0.5, // More transparent at lower zoom
+            0.5,
             14,
             0.7,
             18,
@@ -405,12 +619,13 @@ const MapViewAdmin = () => {
           ],
         },
       });
-      // UPDATED: Labels only show at higher zoom levels
+
+      // labels block can stay as‑is
       map.current.addLayer({
         id: "contaminated-sources-labels",
         type: "symbol",
         source: "contaminated-sources",
-        minzoom: 14, // Show labels at zoom 14 and higher
+        minzoom: 14,
         layout: {
           "text-field": ["get", "name"],
           "text-size": [
@@ -570,10 +785,10 @@ const MapViewAdmin = () => {
   const removeHeatmapLayer = () => {
     if (!map.current) return;
 
-    // Remove layers in reverse order (children before parents)
     const layersToRemove = [
-      "contaminated-sources-labels", // Remove labels first
-      "contaminated-sources", // Then remove source circles
+      "contaminated-sources-labels",
+      "contaminated-sources",
+      "household-icons", // ✅ NEW
       "household-risk-points",
       "risk-clusters",
       "risk-grid",
@@ -586,7 +801,6 @@ const MapViewAdmin = () => {
       }
     });
 
-    // Remove sources after all layers are removed
     const sourcesToRemove = ["contaminated-sources", "household-heatmap"];
     sourcesToRemove.forEach((sourceId) => {
       if (map.current.getSource(sourceId)) {
@@ -674,6 +888,26 @@ const MapViewAdmin = () => {
     fetchHouseholdData();
   }, []);
 
+  useEffect(() => {
+    // Refresh markers (they read getWaterQualityInfo -> which depends on resultMode)
+    if (mapStatus === "loaded" && locations.length > 0 && map.current) {
+      addMarkers();
+    }
+
+    // Refresh heatmap data/layers if currently in heatmap view
+    const refreshHeatmap = async () => {
+      if (viewMode !== "heatmap") return;
+
+      await fetchHouseholdData(); // now mode-aware
+      if (map.current) {
+        removeHeatmapLayer();
+        addHeatmapLayer();
+      }
+    };
+
+    refreshHeatmap();
+  }, [resultMode]);
+
   // NEW: Image viewer state
   const [imageViewer, setImageViewer] = useState({
     isOpen: false,
@@ -696,62 +930,10 @@ const MapViewAdmin = () => {
     ],
   };
 
-  // UPDATED: Get water quality status and color based on new rules
   const getWaterQualityInfo = (location) => {
-    const coliform = location.coliform_bacteria;
-    const eColi = location.e_coli;
-
-    // Case 1: No tests conducted (both null)
-    if (coliform === null && eColi === null) {
-      return {
-        status: "NO DATA",
-        color: "#9ca3af", // Gray
-        description:
-          "⏳ Water samples have not been collected or tested yet. Testing is required to determine water quality status.",
-      };
-    }
-
-    // Case 2: E. coli present (regardless of coliform status)
-    if (eColi === true) {
-      return {
-        status: "UNDRINKABLE",
-        color: "#ef4444", // Red
-        description:
-          "🚨 E. coli detected in water sample. This water is unsafe for drinking and requires treatment.",
-      };
-    }
-
-    // Case 3: Coliform present but E. coli absent
-    if (coliform === true && (eColi === false || eColi === null)) {
-      return {
-        status: "WARNING",
-        color: "#f97316", // Orange
-        description:
-          "⚠️ Coliform bacteria detected but E. coli is absent. Further testing is recommended to ensure water safety.",
-      };
-    }
-
-    // Case 4: Both bacteria absent (safe)
-    if (
-      (coliform === false || coliform === null) &&
-      (eColi === false || eColi === null)
-    ) {
-      // Only mark as safe if both are explicitly false or one is false and other null
-      // But if one is true, it would have been caught above
-      return {
-        status: "SAFE",
-        color: "#10b981", // Green
-        description:
-          "✅ Water quality tests indicate this source is safe for drinking. No harmful bacteria detected.",
-      };
-    }
-
-    // Default fallback
-    return {
-      status: "UNKNOWN",
-      color: "#9ca3af", // Gray
-      description: "❓ Water quality status needs further evaluation.",
-    };
+    return resultMode === "quantitative"
+      ? getQuantitativeQualityInfo(location)
+      : getQualitativeQualityInfo(location);
   };
 
   const hasTestResults = (location) => {
@@ -795,6 +977,180 @@ const MapViewAdmin = () => {
       return "Date error";
     }
   };
+
+  const ImageViewerModal = () => {
+    if (!imageViewer.isOpen) return null;
+
+    const handleMouseDown = (e) => {
+      if (imageViewer.zoom > 1) {
+        setImageViewer((prev) => ({
+          ...prev,
+          isDragging: true,
+          dragStart: {
+            x: e.clientX - prev.position.x,
+            y: e.clientY - prev.position.y,
+          },
+        }));
+      }
+    };
+
+    const handleMouseMove = (e) => {
+      if (imageViewer.isDragging && imageViewer.zoom > 1) {
+        setImageViewer((prev) => ({
+          ...prev,
+          position: {
+            x: e.clientX - prev.dragStart.x,
+            y: e.clientY - prev.dragStart.y,
+          },
+        }));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setImageViewer((prev) => ({ ...prev, isDragging: false }));
+    };
+
+    return (
+      <div
+        className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center"
+        style={{ zIndex: 10000 }}
+        onClick={closeImageViewer}
+      >
+        <div className="relative max-w-[95vw] max-h-[95vh] flex flex-col">
+          {/* Header */}
+          <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 z-10 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">
+                {imageViewer.locationName}
+              </h3>
+              <p className="text-sm text-gray-300">
+                Water Source Location Image
+              </p>
+            </div>
+            <button
+              onClick={closeImageViewer}
+              className="text-white hover:text-gray-300 text-2xl leading-none p-2"
+              title="Close (Esc)"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Image Container */}
+          <div
+            className="relative overflow-hidden bg-black rounded-lg mt-16"
+            style={{
+              minWidth: "300px",
+              minHeight: "300px",
+              maxWidth: "90vw",
+              maxHeight: "80vh",
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            <img
+              src={imageViewer.imageSrc}
+              alt={imageViewer.locationName}
+              className="max-w-none"
+              style={{
+                transform: `scale(${imageViewer.zoom}) translate(${imageViewer.position.x}px, ${imageViewer.position.y}px)`,
+                cursor:
+                  imageViewer.zoom > 1
+                    ? imageViewer.isDragging
+                      ? "grabbing"
+                      : "grab"
+                    : "default",
+                transition: imageViewer.isDragging
+                  ? "none"
+                  : "transform 0.3s ease",
+                maxHeight: "80vh",
+                width: "auto",
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                e.target.src = "/placeholder-image.png";
+                e.target.alt = "Image not found";
+              }}
+            />
+          </div>
+
+          {/* Controls */}
+          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 z-10">
+            <div className="flex items-center justify-center space-x-4">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  zoomOut();
+                }}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                disabled={imageViewer.zoom <= 0.5}
+                title="Zoom Out (-)"
+              >
+                <span className="text-lg">−</span>
+                <span className="text-sm">Zoom Out</span>
+              </button>
+
+              <div className="text-sm bg-white bg-opacity-20 px-3 py-2 rounded-lg text-gray-500">
+                {Math.round(imageViewer.zoom * 100)}%
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  zoomIn();
+                }}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                disabled={imageViewer.zoom >= 5}
+                title="Zoom In (+)"
+              >
+                <span className="text-lg">+</span>
+                <span className="text-sm">Zoom In</span>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resetZoom();
+                }}
+                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                title="Reset Zoom (0)"
+              >
+                <span className="text-sm">Reset</span>
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-300 text-center mt-2">
+              Use mouse wheel to zoom • Drag to pan when zoomed • Press Esc or
+              click outside to close
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Also add mouse wheel zoom support
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (!imageViewer.isOpen) return;
+
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.2 : 0.2;
+      const newZoom = Math.max(0.5, Math.min(5, imageViewer.zoom + delta));
+
+      setImageViewer((prev) => ({
+        ...prev,
+        zoom: newZoom,
+      }));
+    };
+
+    if (imageViewer.isOpen) {
+      document.addEventListener("wheel", handleWheel, { passive: false });
+      return () => document.removeEventListener("wheel", handleWheel);
+    }
+  }, [imageViewer.isOpen, imageViewer.zoom]);
 
   // Enhanced time formatting with better error handling
   const formatTime = (timeString) => {
@@ -1000,7 +1356,7 @@ const MapViewAdmin = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/streets-v12",
+        style: "mapbox://styles/mapbox/satellite-streets-v12",
         center: MAASIN_CONFIG.center,
         zoom: MAASIN_CONFIG.zoom,
         maxBounds: MAASIN_CONFIG.bounds,
@@ -1248,131 +1604,110 @@ const MapViewAdmin = () => {
     popupsRef.current.forEach((popup) => popup.remove());
     popupsRef.current = [];
 
-    // Calculate bounds for all locations within Maasin
     const bounds = new mapboxgl.LngLatBounds();
 
     locations.forEach((location) => {
       if (location.latitude && location.longitude) {
-        const { color } = getWaterQualityInfo(location);
         const lngLat = [location.longitude, location.latitude];
 
-        // 🔍 Check if location is within Maasin bounds
         const isInMaasin =
           location.longitude >= MAASIN_CONFIG.bounds[0][0] &&
           location.longitude <= MAASIN_CONFIG.bounds[1][0] &&
           location.latitude >= MAASIN_CONFIG.bounds[0][1] &&
           location.latitude <= MAASIN_CONFIG.bounds[1][1];
 
-        // Only add markers for locations within Maasin bounds
-        if (isInMaasin) {
-          bounds.extend(lngLat);
+        if (!isInMaasin) return;
 
-          // Create marker element - SIMPLIFIED VERSION
-          const el = document.createElement("div");
-          el.className = "custom-marker";
-          el.style.cssText = `
-            width: 16px; 
-            height: 16px; 
-            border-radius: 50%;
-            background-color: ${color};
-            border: 3px solid white; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            cursor: pointer;
-            position: relative;
-            z-index: 1;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            pointer-events: auto;
-          `;
+        bounds.extend(lngLat);
 
-          // Create a container div for better positioning
-          const container = document.createElement("div");
-          container.style.cssText = `
-            position: absolute;
-            width: 28px;
-            height: 28px;
-            pointer-events: auto;
-            cursor: pointer;
-          `;
-          container.appendChild(el);
+        const iconSrc = getMarkerIconPath(location);
 
-          // Store the location data
-          el.dataset.locationId = location.id || location.full_name;
+        // ✅ Use PNG marker icon
+        const img = document.createElement("img");
+        img.className = "custom-marker-icon";
+        img.src = iconSrc;
+        img.alt = "Water source status";
+        img.style.cssText = `
+          width: 34px;
+          height: 34px;
+          object-fit: contain;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-drag: none;
+          filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+          transition: transform 0.18s ease, filter 0.18s ease;
+          pointer-events: auto;
+        `;
 
-          // Create marker using the container
-          const marker = new mapboxgl.Marker({
-            element: container,
-            anchor: "center",
+        // Container helps capture hover/click reliably
+        const container = document.createElement("div");
+        container.style.cssText = `
+          width: 34px;
+          height: 34px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: auto;
+        `;
+        container.appendChild(img);
+
+        const marker = new mapboxgl.Marker({
+          element: container,
+          anchor: "bottom", // feels more natural for pin-style icons
+        })
+          .setLngLat(lngLat)
+          .addTo(map.current);
+
+        // Hover effect
+        container.addEventListener("mouseenter", () => {
+          img.style.transform = "scale(1.12)";
+          img.style.filter = "drop-shadow(0 4px 12px rgba(0,0,0,0.45))";
+        });
+
+        container.addEventListener("mouseleave", () => {
+          img.style.transform = "scale(1)";
+          img.style.filter = "drop-shadow(0 2px 6px rgba(0,0,0,0.35))";
+        });
+
+        const openPopup = () => {
+          popupsRef.current.forEach((popup) => popup.remove());
+          popupsRef.current = [];
+
+          const popup = new mapboxgl.Popup({
+            closeButton: true,
+            closeOnClick: true,
+            maxWidth: "400px",
+            offset: 25,
+            className: "water-quality-popup",
           })
             .setLngLat(lngLat)
+            .setHTML(createPopupContent(location))
             .addTo(map.current);
 
-          // Add hover effect
-          container.addEventListener("mouseenter", () => {
-            el.style.transform = "scale(1.2)";
-            el.style.zIndex = "2";
-            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
+          popupsRef.current.push(popup);
+
+          map.current.flyTo({
+            center: lngLat,
+            zoom: Math.max(map.current.getZoom(), 16),
+            duration: 1000,
           });
 
-          container.addEventListener("mouseleave", () => {
-            el.style.transform = "scale(1)";
-            el.style.zIndex = "1";
-            el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+          popup.on("close", () => {
+            const index = popupsRef.current.indexOf(popup);
+            if (index > -1) popupsRef.current.splice(index, 1);
           });
+        };
 
-          const openPopup = () => {
-            // Remove any existing popups
-            popupsRef.current.forEach((popup) => popup.remove());
-            popupsRef.current = [];
+        container.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          openPopup();
+        });
 
-            // Create new popup with larger maxWidth for images
-            const popup = new mapboxgl.Popup({
-              closeButton: true,
-              closeOnClick: true,
-              maxWidth: "400px", // Increased for images
-              offset: 25,
-              className: "water-quality-popup",
-            })
-              .setLngLat(lngLat)
-              .setHTML(createPopupContent(location))
-              .addTo(map.current);
-
-            popupsRef.current.push(popup);
-
-            // Focus on the marker when popup opens
-            map.current.flyTo({
-              center: lngLat,
-              zoom: Math.max(map.current.getZoom(), 16),
-              duration: 1000,
-            });
-
-            // Remove popup from refs when it closes
-            popup.on("close", () => {
-              const index = popupsRef.current.indexOf(popup);
-              if (index > -1) {
-                popupsRef.current.splice(index, 1);
-              }
-            });
-          };
-
-          // Add click handler to both elements
-          container.addEventListener("click", (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            openPopup();
-          });
-
-          el.addEventListener("click", (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            openPopup();
-          });
-
-          markersRef.current.push(marker);
-        }
+        markersRef.current.push(marker);
       }
     });
 
-    // Fit map to bounds if we have multiple locations within Maasin
     if (markersRef.current.length > 1) {
       setTimeout(() => {
         if (map.current) {
@@ -1384,7 +1719,6 @@ const MapViewAdmin = () => {
         }
       }, 500);
     } else if (markersRef.current.length === 1) {
-      // Center on single marker
       const firstLocation = locations.find(
         (loc) =>
           loc.longitude >= MAASIN_CONFIG.bounds[0][0] &&
@@ -1513,6 +1847,19 @@ const MapViewAdmin = () => {
                 </>
               )}
             </button>
+            <div className="flex items-center">
+              <select
+                value={resultMode}
+                onChange={(e) => setResultMode(e.target.value)}
+                className="cursor-pointer px-4 py-2.5 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 font-medium transition-all duration-200"
+                title="Filter markers/heatmap by result type"
+              >
+                <option value="qualitative">
+                  Quantitative (Bacteriological Exam)
+                </option>
+                <option value="quantitative">Qualitative (Colilert)</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1676,7 +2023,7 @@ const MapViewAdmin = () => {
                       <div className="w-6 h-6 bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow-md flex-shrink-0 ring-2 ring-red-200"></div>
                       <div>
                         <div className="text-sm font-medium text-red-800">
-                          Undrinkable
+                          Non Potable Water Source
                         </div>
                         <div className="text-xs text-red-600">
                           E. coli detected
@@ -1701,7 +2048,7 @@ const MapViewAdmin = () => {
                           Safe
                         </div>
                         <div className="text-xs text-green-600">
-                          No bacteria found
+                          E-coli not detected
                         </div>
                       </div>
                     </div>
@@ -1760,6 +2107,7 @@ const MapViewAdmin = () => {
           )}
         </div>
       </div>
+      <ImageViewerModal />
     </Layout>
   );
 };

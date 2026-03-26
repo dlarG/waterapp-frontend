@@ -8,4 +8,8 @@ export default defineConfig({
     react(),
     tailwindcss(), // Add the plugin to the plugins array
   ],
+  server: {
+    host: true, // or '0.0.0.0'
+    port: 5173, // default Vite port
+  },
 });

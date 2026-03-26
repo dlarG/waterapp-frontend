@@ -110,38 +110,34 @@ const Dashboard = () => {
   };
 
   const calculateStats = (locationData) => {
-    const stats = {
+    const next = {
       total: locationData.length,
-      safe: 0,
-      undrinkable: 0,
-      hazard: 0,
-      pending: 0,
+      safe: 0, // will represent DRINKABLE
+      undrinkable: 0, // will represent WARNING
+      hazard: 0, // will represent CONTAMINATED
+      pending: 0, // will represent NOT TESTED
     };
 
     locationData.forEach((location) => {
-      const hasResults =
-        location.coliform_bacteria !== null || location.e_coli !== null;
+      const status = getStatusText(location);
 
-      if (!hasResults) {
-        stats.pending++;
-      } else {
-        switch (location.water_status) {
-          case "safe":
-            stats.safe++;
-            break;
-          case "undrinkable":
-            stats.undrinkable++;
-            break;
-          case "hazard":
-            stats.hazard++;
-            break;
-          default:
-            stats.pending++;
-        }
+      switch (status) {
+        case "DRINKABLE":
+          next.safe++;
+          break;
+        case "WARNING":
+          next.undrinkable++;
+          break;
+        case "CONTAMINATED":
+          next.hazard++;
+          break;
+        case "NOT TESTED":
+          next.pending++;
+          break;
       }
     });
 
-    setStats(stats);
+    setStats(next);
   };
 
   const generateRecentActivity = (locationData) => {
@@ -149,11 +145,23 @@ const Dashboard = () => {
 
     locationData.forEach((location) => {
       if (location.sample_date) {
+        const statusText = getStatusText(location);
+
+        // map back to Dashboard's icon/color helpers (safe/undrinkable/hazard/default)
+        const mappedStatus =
+          statusText === "DRINKABLE"
+            ? "safe"
+            : statusText === "WARNING"
+            ? "undrinkable"
+            : statusText === "CONTAMINATED"
+            ? "hazard"
+            : "pending";
+
         activities.push({
           id: location.id,
           type: "sample",
           location: location.full_name,
-          status: location.water_status,
+          status: mappedStatus,
           date: new Date(location.sample_date),
           time: location.sample_time,
           bacteria: location.coliform_bacteria,
@@ -191,6 +199,41 @@ const Dashboard = () => {
     } catch {
       return timeString;
     }
+  };
+
+  const getStatusText = (location) => {
+    const coliform_bacteria = location?.coliform_bacteria ?? null;
+    const e_coli = location?.e_coli ?? null;
+    const exam = String(location?.bacteriological_exam || "")
+      .trim()
+      .toLowerCase();
+
+    // 1) Exam failed overrides everything
+    if (exam === "failed") return "CONTAMINATED";
+
+    // 2) Exam passed overrides bacteria results
+    if (exam === "passed") return "DRINKABLE";
+
+    // 3) Exam untested but bacteria positive => WARNING
+    if (
+      exam === "untested" &&
+      (coliform_bacteria === true || e_coli === true)
+    ) {
+      return "WARNING";
+    }
+
+    // 4) Not tested (no results at all)
+    if (exam === "untested" && coliform_bacteria === null && e_coli === null) {
+      return "NOT TESTED";
+    }
+
+    // 5) Fallback to bacteria-only logic (when exam is missing/other)
+    if (e_coli === true) return "CONTAMINATED"; // treat as contaminated/undrinkable
+    if (coliform_bacteria === true && e_coli === true) return "CONTAMINATED";
+    if (coliform_bacteria === true && e_coli === false) return "WARNING";
+    if (coliform_bacteria === false && e_coli === false) return "DRINKABLE";
+
+    return "UNKNOWN";
   };
 
   const getStatusIcon = (status) => {
@@ -395,13 +438,17 @@ const Dashboard = () => {
                   <div>
                     <div className="flex items-center space-x-3 mb-4">
                       <div>
-                        <p className="text-sm text-gray-600">Safe Water</p>
+                        <p className="text-sm text-gray-600">
+                          Drinkable Sources
+                        </p>
                         <h3 className="text-3xl font-bold text-gray-900">
                           {stats.safe}
                         </h3>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-500">Drinkable sources</p>
+                    <p className="text-sm text-gray-500">
+                      Potable Water Source
+                    </p>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-green-600">
@@ -426,22 +473,22 @@ const Dashboard = () => {
                   <div>
                     <div className="flex items-center space-x-3 mb-4">
                       <div>
-                        <p className="text-sm text-gray-600">Undrinkable</p>
+                        <p className="text-sm text-gray-600">Contaminated</p>
                         <h3 className="text-3xl font-bold text-gray-900">
-                          {stats.undrinkable}
+                          {stats.hazard}
                         </h3>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-500">Needs treatment</p>
+                    <p className="text-sm text-gray-500">Non Potable Source</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-orange-600">
+                    <div className="text-2xl font-bold text-red-600">
                       {stats.total > 0
-                        ? ((stats.undrinkable / stats.total) * 100).toFixed(1)
+                        ? ((stats.hazard / stats.total) * 100).toFixed(1)
                         : 0}
                       %
                     </div>
-                    <div className="text-xs text-gray-500">Warning</div>
+                    <div className="text-xs text-gray-500">Danger</div>
                   </div>
                 </div>
               </motion.div>
@@ -457,22 +504,24 @@ const Dashboard = () => {
                   <div>
                     <div className="flex items-center space-x-3 mb-4">
                       <div>
-                        <p className="text-sm text-gray-600">Hazardous</p>
+                        <p className="text-sm text-gray-600">Warning</p>
                         <h3 className="text-3xl font-bold text-gray-900">
-                          {stats.hazard}
+                          {stats.undrinkable}
                         </h3>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-500">Unsafe sources</p>
+                    <p className="text-sm text-gray-500">
+                      Need further testing
+                    </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-red-600">
+                    <div className="text-2xl font-bold text-orange-600">
                       {stats.total > 0
-                        ? ((stats.hazard / stats.total) * 100).toFixed(1)
+                        ? ((stats.undrinkable / stats.total) * 100).toFixed(1)
                         : 0}
                       %
                     </div>
-                    <div className="text-xs text-gray-500">Danger</div>
+                    <div className="text-xs text-gray-500">Warning</div>
                   </div>
                 </div>
               </motion.div>

@@ -18,17 +18,25 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const savedAdmin = localStorage.getItem("admin");
-    if (savedAdmin) {
+    const savedToken = localStorage.getItem("token"); // ✅ NEW
+
+    // ✅ Only restore session if token exists
+    if (savedAdmin && savedToken) {
       try {
         const parsedAdmin = JSON.parse(savedAdmin);
-
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setAdmin(parsedAdmin);
       } catch (error) {
         console.error("Error parsing saved admin:", error);
         localStorage.removeItem("admin");
+        localStorage.removeItem("token");
       }
+    } else {
+      // if one exists without the other, clean up
+      localStorage.removeItem("admin");
+      localStorage.removeItem("token");
     }
+
     setLoading(false);
   }, []);
 
@@ -38,14 +46,25 @@ export const AuthProvider = ({ children }) => {
       console.log("🔍 Login response:", response);
 
       if (response.success) {
-        // Store the complete admin object from response
         const adminData = response.admin;
 
         setAdmin(adminData);
         localStorage.setItem("admin", JSON.stringify(adminData));
 
+        // ✅ SAVE TOKEN so api.js can attach Authorization header
+        if (response.token) {
+          localStorage.setItem("token", response.token);
+        } else {
+          // If token is missing, treat as failure because protected endpoints will 401
+          return {
+            success: false,
+            error: "Login token missing from server response.",
+          };
+        }
+
         return { success: true, admin: adminData };
       }
+
       return { success: false, error: response.error };
     } catch (error) {
       console.error("❌ Login error:", error);
@@ -56,12 +75,13 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setAdmin(null);
     localStorage.removeItem("admin");
+    localStorage.removeItem("token"); // ✅ NEW
   };
 
   // 🔧 FIX: Provide both `admin` and `user` for compatibility
   const value = {
     admin,
-    user: admin, // 🎯 Map admin to user for Dashboard compatibility
+    user: admin,
     login,
     logout,
     loading,
@@ -96,13 +116,7 @@ export const AuthProvider = ({ children }) => {
               margin: "0 auto 15px",
             }}
           ></div>
-          <p
-            style={{
-              margin: 0,
-              color: "#4b5563",
-              fontSize: "16px",
-            }}
-          >
+          <p style={{ margin: 0, color: "#4b5563", fontSize: "16px" }}>
             🔒 Loading Authentication...
           </p>
         </div>
