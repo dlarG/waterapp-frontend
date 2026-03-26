@@ -29,6 +29,126 @@ const MapViewAdmin = () => {
     avgRiskScore: 0,
   });
 
+  const [resultMode, setResultMode] = useState("quantitative");
+  const normalizeExam = (exam) =>
+    String(exam || "")
+      .trim()
+      .toLowerCase();
+
+  const getQuantitativeQualityInfo = (location) => {
+    const coliform = location?.coliform_bacteria ?? null;
+    const eColi = location?.e_coli ?? null;
+
+    // Both null => brown
+    if (coliform === null && eColi === null) {
+      return {
+        status: "NO DATA",
+        color: "#808080", // brown
+        description:
+          "⏳ No Colilert test results yet (Coliform and E. coli are not tested).",
+      };
+    }
+
+    // If E. coli present => red (even if both present)
+    if (eColi === true) {
+      return {
+        status: "E. COLI POSITIVE",
+        color: "#ef4444", // red
+        description:
+          "🚨 E. coli detected based on Colilert result. Unsafe for drinking.",
+      };
+    }
+
+    // Only coliform positive => orange
+    if (coliform === true && (eColi === false || eColi === null)) {
+      return {
+        status: "COLIFORM POSITIVE",
+        color: "#f97316", // orange
+        description:
+          "⚠️ Coliform detected based on Colilert result. Further testing recommended.",
+      };
+    }
+
+    // Both negative => green
+    if (coliform === false && eColi === false) {
+      return {
+        status: "NEGATIVE",
+        color: "#10b981", // green
+        description:
+          "✅ Colilert result indicates no detected bacteria (Coliform & E. coli are negative).",
+      };
+    }
+
+    // Fallback (mixed null/false states)
+    if (coliform === false && eColi === null) {
+      return {
+        status: "PARTIAL DATA",
+        color: "#92400e", // brown (treat as incomplete)
+        description:
+          "⏳ Partial Colilert data: Coliform is negative but E. coli is not tested.",
+      };
+    }
+
+    if (coliform === null && eColi === false) {
+      return {
+        color: "#10b981", // green
+        description:
+          "✅ Colilert result indicates no detected bacteria (Coliform & E. coli are negative).",
+      };
+    }
+
+    return {
+      status: "UNKNOWN",
+      color: "#6b7280",
+      description: "❓ Water quality status needs further evaluation.",
+    };
+  };
+
+  const getQualitativeQualityInfo = (location) => {
+    const exam = normalizeExam(location?.bacteriological_exam);
+
+    if (exam === "failed") {
+      return {
+        status: "FAILED",
+        color: "#ef4444", // red
+        description:
+          "🚨 Bacteriological exam failed. This water source is contaminated.",
+      };
+    }
+
+    if (exam === "passed") {
+      return {
+        status: "PASSED",
+        color: "#10b981", // green
+        description:
+          "✅ Bacteriological exam passed. This water source is safe to drink.",
+      };
+    }
+
+    // untested or null => gray
+    if (exam === "untested" || exam === "") {
+      return {
+        status: "UNTESTED",
+        color: "#9ca3af", // gray
+        description: "⏳ Bacteriological exam is untested / not recorded yet.",
+      };
+    }
+
+    // any other unexpected value
+    return {
+      status: "UNKNOWN",
+      color: "#9ca3af",
+      description: "❓ Bacteriological exam status is unknown.",
+    };
+  };
+
+  // const isContaminatedForHeatmap = (location) => {
+  //   if (resultMode === "quantitative") {
+  //     return location?.e_coli === true;
+  //   }
+  //   return normalizeExam(location?.bacteriological_exam) === "failed";
+  // };
+
   const fetchHouseholdData = async () => {
     try {
       setHeatmapLoading(true);
@@ -36,11 +156,9 @@ const MapViewAdmin = () => {
 
       const [householdsResponse, riskResponse] = await Promise.all([
         householdAPI.getAll(),
-        householdAPI.getRiskAnalysis(),
+        // ✅ pass mode: quantitative|qualitative
+        householdAPI.getRiskAnalysis({ mode: resultMode }),
       ]);
-
-      console.log("🏠 Households response:", householdsResponse);
-      console.log("🎯 Risk response:", riskResponse);
 
       if (householdsResponse.success) {
         setHouseholdData(householdsResponse.data);
@@ -166,7 +284,6 @@ const MapViewAdmin = () => {
       source: "household-heatmap",
       maxzoom: 18,
       paint: {
-        // Increase the heatmap weight based on risk score with exam_failed bias
         "heatmap-weight": [
           "interpolate",
           ["linear"],
@@ -175,9 +292,9 @@ const MapViewAdmin = () => {
             ["get", "risk_score"],
             [
               "case",
-              ["==", ["get", "exam_failed"], true],
-              1.3, // 30% boost for failed exam zones
-              1.0,
+              ["==", ["literal", resultMode], "quantitative"],
+              ["case", ["==", ["get", "e_coli"], true], 1.3, 1.0],
+              ["case", ["==", ["get", "exam_failed"], true], 1.3, 1.0],
             ],
           ],
           0,
@@ -335,7 +452,6 @@ const MapViewAdmin = () => {
 
     // Add contaminated water sources as markers if enabled
     if (showContaminatedSources) {
-      // Get unique contaminated water sources
       const contaminatedSources = [
         ...new Map(
           riskData.map((item) => [
@@ -343,7 +459,11 @@ const MapViewAdmin = () => {
             {
               name: item.water_source,
               contamination: item.contamination_type,
-              coordinates: [item.longitude, item.latitude],
+              // prefer water coords if present (from backend fix)
+              coordinates: [
+                item.water_longitude ?? item.longitude,
+                item.water_latitude ?? item.latitude,
+              ],
             },
           ])
         ).values(),
@@ -351,19 +471,26 @@ const MapViewAdmin = () => {
 
       const sourceData = {
         type: "FeatureCollection",
-        features: contaminatedSources.map((source) => ({
-          type: "Feature",
-          geometry: {
-            type: "Point",
-            coordinates: source.coordinates,
-          },
-          properties: {
-            name: source.name,
-            coliform: source.contamination?.coliform || false,
-            e_coli: source.contamination?.e_coli || false,
-            exam_failed: source.contamination?.exam_failed || false, // 👈 NEW
-          },
-        })),
+        features: contaminatedSources
+          .filter(
+            (s) =>
+              Array.isArray(s.coordinates) &&
+              typeof s.coordinates[0] === "number" &&
+              typeof s.coordinates[1] === "number"
+          )
+          .map((source) => ({
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: source.coordinates,
+            },
+            properties: {
+              name: source.name,
+              coliform: source.contamination?.coliform || false,
+              e_coli: source.contamination?.e_coli || false,
+              exam_failed: source.contamination?.exam_failed || false,
+            },
+          })),
       };
 
       map.current.addSource("contaminated-sources", {
@@ -692,6 +819,26 @@ const MapViewAdmin = () => {
     fetchHouseholdData();
   }, []);
 
+  useEffect(() => {
+    // Refresh markers (they read getWaterQualityInfo -> which depends on resultMode)
+    if (mapStatus === "loaded" && locations.length > 0 && map.current) {
+      addMarkers();
+    }
+
+    // Refresh heatmap data/layers if currently in heatmap view
+    const refreshHeatmap = async () => {
+      if (viewMode !== "heatmap") return;
+
+      await fetchHouseholdData(); // now mode-aware
+      if (map.current) {
+        removeHeatmapLayer();
+        addHeatmapLayer();
+      }
+    };
+
+    refreshHeatmap();
+  }, [resultMode]);
+
   // NEW: Image viewer state
   const [imageViewer, setImageViewer] = useState({
     isOpen: false,
@@ -714,92 +861,10 @@ const MapViewAdmin = () => {
     ],
   };
 
-  // UPDATED: Get water quality status and color based on new rules
   const getWaterQualityInfo = (location) => {
-    const coliform = location.coliform_bacteria;
-    const eColi = location.e_coli;
-    const exam = (location.bacteriological_exam || "").toLowerCase();
-
-    // 1) Contaminated: exam failed overrides everything
-    if (exam === "failed") {
-      return {
-        status: "CONTAMINATED",
-        color: "#ef4444", // Red
-        description:
-          "🚨 Bacteriological exam failed. This water source is considered contaminated regardless of bacteria values.",
-      };
-    }
-
-    // 2) Safe: exam passed overrides bacteria results
-    if (exam === "passed") {
-      return {
-        status: "SAFE",
-        color: "#10b981", // Green
-        description:
-          "✅ Bacteriological exam passed. This water source is considered safe to drink.",
-      };
-    }
-
-    // 3) Warning: exam untested but bacteria positive (either coliform or E. coli)
-    if (exam === "untested" && (coliform === true || eColi === true)) {
-      return {
-        status: "WARNING",
-        color: "#f97316", // Orange
-        description:
-          "⚠️ Bacteria detected but the bacteriological exam is untested. Further confirmation is required.",
-      };
-    }
-
-    // 4) No data: nothing tested or all null/untested
-    if (
-      (coliform === null && eColi === null && !exam) ||
-      (coliform === null && eColi === null && exam === "untested")
-    ) {
-      return {
-        status: "NO DATA",
-        color: "#9ca3af", // Gray
-        description:
-          "⏳ No test data available yet for this water source. Please collect and test samples.",
-      };
-    }
-
-    // Fallback (for older records where only bacteria exist)
-    if (eColi === true) {
-      return {
-        status: "CONTAMINATED",
-        color: "#ef4444",
-        description:
-          "🚨 E. coli detected. This water source is contaminated and unsafe for drinking.",
-      };
-    }
-
-    if (coliform === true && (eColi === false || eColi === null)) {
-      return {
-        status: "WARNING",
-        color: "#f97316",
-        description:
-          "⚠️ Coliform bacteria detected. Further bacteriological examination is recommended.",
-      };
-    }
-
-    if (
-      (coliform === false || coliform === null) &&
-      (eColi === false || eColi === null)
-    ) {
-      return {
-        status: "SAFE",
-        color: "#10b981",
-        description:
-          "✅ No harmful bacteria detected. Water is considered safe based on available tests.",
-      };
-    }
-
-    // Default fallback
-    return {
-      status: "UNKNOWN",
-      color: "#9ca3af",
-      description: "❓ Water quality status needs further evaluation.",
-    };
+    return resultMode === "quantitative"
+      ? getQuantitativeQualityInfo(location)
+      : getQualitativeQualityInfo(location);
   };
 
   const hasTestResults = (location) => {
@@ -1735,6 +1800,19 @@ const MapViewAdmin = () => {
                 </>
               )}
             </button>
+            <div className="flex items-center">
+              <select
+                value={resultMode}
+                onChange={(e) => setResultMode(e.target.value)}
+                className="cursor-pointer px-4 py-2.5 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 font-medium transition-all duration-200"
+                title="Filter markers/heatmap by result type"
+              >
+                <option value="qualitative">
+                  Qualitative (Bacteriological Exam)
+                </option>
+                <option value="quantitative">Quantitative (Colilert)</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1898,7 +1976,7 @@ const MapViewAdmin = () => {
                       <div className="w-6 h-6 bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow-md flex-shrink-0 ring-2 ring-red-200"></div>
                       <div>
                         <div className="text-sm font-medium text-red-800">
-                          Undrinkable
+                          Non Potable Water Source
                         </div>
                         <div className="text-xs text-red-600">
                           E. coli detected
@@ -1923,7 +2001,7 @@ const MapViewAdmin = () => {
                           Safe
                         </div>
                         <div className="text-xs text-green-600">
-                          No bacteria found
+                          E-coli not detected
                         </div>
                       </div>
                     </div>

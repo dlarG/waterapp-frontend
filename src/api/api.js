@@ -3,9 +3,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
 // API utility functions
 const apiRequest = async (endpoint, options = {}) => {
   try {
+    const token = localStorage.getItem("token");
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,
@@ -14,7 +17,8 @@ const apiRequest = async (endpoint, options = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "API request failed");
+      // ...existing code...
+      throw new Error(data?.error || "Request failed");
     }
 
     return data;
@@ -82,7 +86,10 @@ export const householdAPI = {
   getAll: () => apiRequest("/households"),
 
   // Get household risk analysis
-  getRiskAnalysis: () => apiRequest("/households/risk-analysis"),
+  getRiskAnalysis: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/households/risk-analysis${qs ? `?${qs}` : ""}`);
+  },
 };
 
 // Barangay API
@@ -123,7 +130,6 @@ export const imageAPI = {
       const response = await fetch(`${API_BASE_URL}/upload-image`, {
         method: "POST",
         body: formData,
-        // Don't set Content-Type header - let browser set it with boundary
       });
 
       const data = await response.json();
