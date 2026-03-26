@@ -45,6 +45,23 @@ const EditForm = ({ location, onSave, onCancel }) => {
     sample_time: location.sample_time || "",
     bacteriological_exam: location.bacteriological_exam || "untested",
   });
+
+  useEffect(() => {
+    setFormData({
+      full_name: location?.full_name || "",
+      barangay: location?.barangay || "",
+      latitude: location?.latitude || "",
+      longitude: location?.longitude || "",
+      coliform_bacteria: location?.coliform_bacteria ?? null,
+      e_coli: location?.e_coli ?? null,
+      sample_date: location?.sample_date || "",
+      sample_time: location?.sample_time || "",
+      bacteriological_exam: (
+        location?.bacteriological_exam || "untested"
+      ).toLowerCase(),
+    });
+  }, [location?.id]);
+
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -82,19 +99,23 @@ const EditForm = ({ location, onSave, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setSaving(true);
 
     try {
-      const response = await waterLocationAPI.update(location.id, {
+      const payload = {
         ...formData,
         latitude: parseFloat(formData.latitude),
         longitude: parseFloat(formData.longitude),
-      });
+        bacteriological_exam: (
+          formData.bacteriological_exam || "untested"
+        ).toLowerCase(),
+      };
+
+      console.log("🟦 UPDATE payload (client):", payload); // ✅ debug
+
+      const response = await waterLocationAPI.update(location.id, payload);
 
       if (response.success) {
         onSave(response.data);
@@ -1605,6 +1626,7 @@ const WaterSourceList = () => {
                 </div>
                 <div className="px-6 py-4">
                   <EditForm
+                    key={modalState.location?.id}
                     location={modalState.location}
                     onSave={handleSaveEdit}
                     onCancel={closeModal}

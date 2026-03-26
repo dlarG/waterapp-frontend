@@ -1222,7 +1222,7 @@ const MapViewAdmin = () => {
 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/streets-v12",
+        style: "mapbox://styles/mapbox/satellite-streets-v12",
         center: MAASIN_CONFIG.center,
         zoom: MAASIN_CONFIG.zoom,
         maxBounds: MAASIN_CONFIG.bounds,
